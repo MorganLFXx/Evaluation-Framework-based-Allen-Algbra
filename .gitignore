@@ -1,0 +1,18 @@
+# Python
+**/__pycache__/
+*/__pycache__/
+__pycache__/
+
+# VENV
+.env
+.venv/
+env/
+venv/
+allenEnv/
+
+# IDEs
+.idea
+.vscode/
+
+# dataset
+datasets/
