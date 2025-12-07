@@ -125,9 +125,14 @@ def generate_sample(sample):
 
 def main():
     parser = argparse.ArgumentParser(description="Run script with parameters")
-    parser.add_argument("--n", type=int, help="生成样例数量")
-    parser.add_argument("--name", type=str, help="生成的文件名")
-    parser.add_argument("--depth", type=str, help="样例递归深度")
+    parser.add_argument("--n", type=int, default=1, help="生成样例数量")
+    parser.add_argument("--name", type=str, required=True, help="生成的文件名")
+    parser.add_argument(
+        "--depth",
+        type=int,
+        default=1,
+        help="样例递归深度，每基于target生成一次formula算一层",
+    )
     args = parser.parse_args()
 
     # print arguments
@@ -136,8 +141,9 @@ def main():
     samples = []
     for i in range(args.n):
         sample = None
-        for _ in range(int(args.depth) + 1):
+        for _ in range(args.depth):
             sample = generate_sample(sample)
+            sample["id"] = i
         samples.append(sample)
     # output to json file
     with open(f"datasets/{args.name}.json", "w") as f:
