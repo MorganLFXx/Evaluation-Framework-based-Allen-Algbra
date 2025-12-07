@@ -1,11 +1,9 @@
 import argparse
-from ctypes.wintypes import HINSTANCE
-from email import message
 import json
-from multiprocessing.connection import answer_challenge
 import os
 from utils.chat import call_pony_api
 from time import sleep
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 allen_helper = """You are an expert in time relation judgment, well-versed in Allen's interval algebra.
 This mathematical framework defines 13 fundamental types of temporal relationships：
@@ -38,7 +36,7 @@ def multi_chat(sample):
         else:
             messages.append({"role": "user", "content": hints[i]})
         result = call_pony_api(messages)
-        print(result)
+        # print(result)
         messages.append({"role": "assistant", "content": result})
         answers.append(result)
         sleep(1)
@@ -59,69 +57,121 @@ def single_chat(sample):
             {"role": "user", "content": question},
         ]
         result = call_pony_api(messages)
-        print(result)
+        # print(result)
         answers.append(result)
         sleep(1)
-    print(answers[-1])
     return answers
+
+
+def process_sample(index, sample, chat_type):
+    print(f"== 正在处理第 {index + 1} 个用例 ==")
+    if chat_type == "multi":
+        return multi_chat(sample)
+    if chat_type == "single":
+        return single_chat(sample)
+    raise ValueError(f"Unsupported chat_type: {chat_type}")
+
+
+def dump_progress(samples, processed_indices, temp_path):
+    next_index = next(
+        (i for i in range(len(samples)) if i not in processed_indices),
+        len(samples),
+    )
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "samples": samples,
+                "next_index": next_index,
+                "completed_indices": sorted(processed_indices),
+            },
+            f,
+            indent=4,
+            ensure_ascii=False,
+        )
 
 
 def main():
     temp_path = "datasets/temp_response.json"
     parser = argparse.ArgumentParser(description="Run script with parameters")
     parser.add_argument("--name", type=str, help="需要生成答案的文件名")
-    parser.add_argument("--chat_type", type=str, help="chat类型(single/multi)")
+    parser.add_argument(
+        "--chat_type",
+        type=str,
+        choices=["single", "multi"],
+        required=True,
+        help="chat类型(single/multi)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="并行调用线程数",
+    )
     args = parser.parse_args()
     if os.path.exists(f"datasets/{args.name}_with_answers.json"):
         samples = json.load(open(f"datasets/{args.name}_with_answers.json", "r"))
     else:
         samples = json.load(open(f"datasets/{args.name}.json", "r"))
 
-    # 恢复进度（如果存在临时文件）
-    start_index = 0
+    answer_key = f"answer_{args.chat_type}"
+    processed_indices = set()
+
     if os.path.exists(temp_path):
         with open(temp_path, "r", encoding="utf-8") as f:
             temp_data = json.load(f)
             samples = temp_data["samples"]
-            start_index = temp_data["next_index"]
-        print(f"从临时文件恢复，继续从第 {start_index + 1} 个用例开始")
+            processed_indices.update(temp_data.get("completed_indices", []))
+            next_index_hint = temp_data.get("next_index")
+            if next_index_hint is not None and not temp_data.get("completed_indices"):
+                processed_indices.update(range(next_index_hint))
+        processed_indices.update(
+            index for index, sample in enumerate(samples) if answer_key in sample
+        )
+        next_unprocessed = next(
+            (i for i in range(len(samples)) if i not in processed_indices),
+            len(samples),
+        )
+        if next_unprocessed < len(samples):
+            print(f"从临时文件恢复，继续从第 {next_unprocessed + 1} 个用例开始")
+        else:
+            print("临时文件表明所有用例已完成")
+    else:
+        processed_indices = {
+            index for index, sample in enumerate(samples) if answer_key in sample
+        }
 
-    for i in range(start_index, len(samples)):
-        sample = samples[i]
-        print(f"== 正在处理第 {i+1} 个用例 ==")
-        try:
-            if args.chat_type == "multi":
-                answers = multi_chat(sample)
-            elif args.chat_type == "single":
-                answers = single_chat(sample)
-            sample[f"answer_{args.chat_type}"] = answers
+    remaining_indices = [i for i in range(len(samples)) if i not in processed_indices]
 
-            # 保存临时进度
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {"samples": samples, "next_index": i + 1},
-                    f,
-                    indent=4,
-                    ensure_ascii=False,
-                )
-
-        except Exception as e:
-            print(f"  ❌ 第 {i+1} 个用例出错: {e}")
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {"samples": samples, "next_index": i},
-                    f,
-                    indent=4,
-                    ensure_ascii=False,
-                )
-            raise e
+    if remaining_indices:
+        max_workers = max(1, args.workers)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_index = {
+                executor.submit(
+                    process_sample,
+                    index,
+                    samples[index],
+                    args.chat_type,
+                ): index
+                for index in remaining_indices
+            }
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                try:
+                    answers = future.result()
+                    samples[index][answer_key] = answers
+                    processed_indices.add(index)
+                    dump_progress(samples, processed_indices, temp_path)
+                except Exception as e:
+                    print(f"  ❌ 第 {index + 1} 个用例出错: {e}")
+                    dump_progress(samples, processed_indices, temp_path)
+                    raise
+    else:
+        print("所有用例已处理完成")
 
     with open(f"datasets/{args.name}_with_answers.json", "w") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
-
     if os.path.exists(temp_path):
         os.remove(temp_path)
-
     print(f"Generated answers and saved to {args.name}_with_answers.json")
 
 
