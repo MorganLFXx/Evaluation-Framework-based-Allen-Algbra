@@ -32,18 +32,16 @@ def call_zhipu_api(query: str) -> str:
         raise Exception(f"API调用失败: {response.status_code}, {response.text}")
 
 
-def call_pony_api(query: str) -> str:
+def call_pony_api(messages) -> str:
     client = OpenAI(
         base_url="https://api.tokenpony.cn/v1", api_key=pony_apikey  # 替换为您的API Key
     )
     try:
         response = client.chat.completions.create(
             model="glm-4.6",  # 替换为您要使用的模型名称
-            messages=[
-                {"role": "user", "content": query},
-            ],
+            messages=messages,
             temperature=0,
-            max_tokens=5000,
+            max_tokens=10000,
             stream=False,
         )
     except Exception as e:
@@ -53,25 +51,50 @@ def call_pony_api(query: str) -> str:
 
 def main():
     try:
-        # for i in range(1, 4):
-        # n = i
-        context = "旅行A 大约在 2019–2021 年，项目B 大致在 2024–2027 年左右。项目C 在 旅行A 结束后约 2 年开始。项目D 和 项目B 大概同时发生"
-        # context = f"此外，节日庆典 发生在 2022 年。 此外，员工培训 大致在 2020–2023 年进行。 实验B 是在 节日庆典前{n}年发生的，任务A发生时间和员工培训大概同时。"
-        question = "对比 C 和 D，它们的时间顺序大概是什么？"
-        options_text = "\n".join(["C 在 D 之前", "C 和 D 有重叠", "C 在 D 之后"])
-        # 使用示例
-        messages = f"""根据以下信息回答问题。请从给定选项中选择最合适(觉得最可能即可，不是要绝对准确)的答案，直接输出选项内容，不要解释。
-        上下文：
-        {context}
-        问题：
-        {question}
-        选项：
-        {options_text}"""
-        # print(f"第{i}次调用API:")
-        result = call_pony_api(messages)
-        # result = call_zhipu_api(messages)
-        print(result)
-        sleep(1)
+        allen_helper = """You are an expert in time relation judgment, well-versed in Allen's interval algebra.
+        This mathematical framework defines 13 fundamental types of temporal relationships：
+        precedes(p), preceded_by(P), meets(m), met_by(M), overlaps(o), overlapped_by(O), finished_by(F), finishes(f), contains(D), during(d), starts(s), started_by(S), equals(e).
+        Here are some things to note: 1. 'A overlaps B' means that there is overlap between A and B but A starts before B 2. 'starts' means A and B start at the same time but A ends before B 3. 'finishes' means A and B end at the same time but A starts after B.
+        The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts.
+        The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
+        """
+        # In the final answers of all responses, you only need to use abbreviations to refer to the corresponding relationships.
+        eventA = "Meeting"
+        eventB = "Exhibition"
+        eventC = "Travel"
+        question = f"Please help me determine the allen relationship between {eventA} A and {eventB} B based on following hints.I will provide all hints step by step. Each time, you must guess all possible relationships.If there are more than six possibilities, please indicate that you cannot determine"
+        hints = [
+            f"1. {eventA} A took place from 2022.9.12 to 2022.12.5.",
+            f"2. {eventC} C occurred from 2022.8.20 to 2022.12.5.",
+            f"3. {eventC} C was overlapped by {eventB} B.",
+            f"4. There is no overlap between {eventA} A and {eventB} B.",
+            f"5. After Tom finished {eventA} A, he did not participate in {eventB} B immediately.",
+        ]
+        # 1
+        message = question + "\n"
+        for i in range(len(hints)):
+            message += hints[i]
+            messages = [
+                {"role": "system", "content": allen_helper},
+                {"role": "user", "content": message},
+            ]
+            print("== Hint ", i + 1, "==")
+            result = call_pony_api(messages)
+            print(result)
+            sleep(1)
+        # for i in range(len(hints)):
+        #     if i == 0:
+        #         messages = [
+        #             {"role": "system", "content": allen_helper},
+        #             {"role": "user", "content": message + hints[i]},
+        #         ]
+        #     else:
+        #         messages.append({"role": "user", "content": hints[i]})
+        #     print("== Hint ", i+1, "==")
+        #     result = call_pony_api(messages)
+        #     messages.append({"role": "assistant", "content": result})
+        #     print(result)
+        #     sleep(1)
     except Exception as e:
         print(str(e))
 
@@ -79,3 +102,19 @@ def main():
 if __name__ == "__main__":
     main()
 
+"""多次对话
+PMO -> PM -> P
+osd -> contradiction
+PO -> P -> P
+pmO -> pm -> contradiction
+PMO -> PM -> contradiction
+PO -> PM -> PM
+osd -> contradiction
+"""
+
+"""单次问答
+PMO -> (osd->contradiction) -> (osd->contradiction) 
+PMO -> (osd->pPmM) -> (osd -> contradiction)
+osd -> (爆token限制了) -> (PO -> PM -> P)
+PMOSD -> (PO->P) -> contradiction
+"""
