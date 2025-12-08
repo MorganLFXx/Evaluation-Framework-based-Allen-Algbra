@@ -1,4 +1,3 @@
-from operator import ge
 import random
 
 # Allen's Interval Algebra relations
@@ -286,61 +285,88 @@ def get_composition(rel: str):
         raise ValueError(f"No composition found for relation: {rel}")
 
 
+def get_negation(rel: str, l_no: int, r_no: int, events: list) -> list:
+    hints = []
+    event_l = events[l_no]
+    event_r = events[r_no]
+    hints.append(
+        f"It is not true that '{event_l}{l_no}' {allen_relations[rel]} '{event_r}{r_no}' ."
+    )
+
+    return hints
+
+
+HINT_TEMPLATES = {
+    "p": [
+        "'{event_l}{l_no}' ends before '{event_r}{r_no}' starts.",
+        "Some time after '{event_l}{l_no}' ended, '{event_r}{r_no}' occurred.",
+        "After '{event_l}{l_no}' had been underway for some time, Tom finally made up his mind to initiate '{event_r}{r_no}'.",
+        "'{event_l}{l_no}' concluded ahead of '{event_r}{r_no}' kicking off.",
+        "There was a gap between the finish of '{event_l}{l_no}' and the start of '{event_r}{r_no}'.",
+    ],
+    "P": [
+        "'{event_l}{l_no}' starts after '{event_r}{r_no}' ends.",
+        "'{event_r}{r_no}' ended before '{event_l}{l_no}' started.",
+    ],
+    "m": [
+        "'{event_l}{l_no}' ends exactly when '{event_r}{r_no}' starts.",
+        "'{event_r}{r_no}' began the moment '{event_l}{l_no}' wrapped up.",
+    ],
+    "M": [
+        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' ends.",
+        "'{event_l}{l_no}' commenced right as '{event_r}{r_no}' wrapped up.",
+    ],
+    "o": [
+        "'{event_l}{l_no}' starts before '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' starts but before '{event_r}{r_no}' ends.",
+        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap in time. But '{event_l}{l_no}' starts first.",
+    ],
+    "O": [
+        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts but before it ends and ends after '{event_r}{r_no}' ends.",
+        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap in time. But '{event_r}{r_no}' starts first.",
+    ],
+    "F": [
+        "'{event_l}{l_no}' ends exactly when '{event_r}{r_no}' ends, but starts before '{event_r}{r_no}' starts.",
+        "'{event_l}{l_no}' finishes at the same time as '{event_l}{l_no}' but began earlier.",
+    ],
+    "f": [
+        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts and ends exactly when '{event_r}{r_no}' ends."
+        "'{event_l}{l_no}' finishes at the same time as '{event_r}{r_no}' but began earlier.",
+    ],
+    "D": [
+        "'{event_l}{l_no}' starts before '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' ends."
+        "During '{event_l}{l_no}', '{event_r}{r_no}' started and ended."
+    ],
+    "d": [
+        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts and ends before '{event_r}{r_no}' ends."
+        "The duration of '{event_l}{l_no}' is part of the duration of '{event_r}{r_no}'."
+    ],
+    "s": [
+        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends before '{event_r}{r_no}' ends."
+        "'{event_l}{l_no}' starts at the same time as '{event_r}{r_no}' but ends later."
+    ],
+    "S": [
+        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' ends."
+        "'{event_l}{l_no}' starts at the same time as '{event_r}{r_no}' but ends earlier."
+    ],
+    "e": [
+        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends exactly when '{event_r}{r_no}' ends."
+        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap completely in time."
+    ],
+}
+
+
 def get_hint(rel: str, l_no: int, r_no: int, events: list, is_not: bool) -> list:
     """Generate hints based on relation and event numbers"""
     hints = []
     event_l = events[l_no]
     event_r = events[r_no]
     if is_not:
-        hints.append(
-            f"It is not true that {event_l}{l_no} {allen_relations[rel]} {event_r}{r_no} ."
-        )
-        return hints
+        return get_negation(rel, l_no, r_no, events)
 
-    if rel == "p":
-        hints.append(f"{event_l}{l_no} ends before {event_r}{r_no} starts.")
-    elif rel == "P":
-        hints.append(f"{event_l}{l_no} starts after {event_r}{r_no} ends.")
-    elif rel == "m":
-        hints.append(f"{event_l}{l_no} ends exactly when {event_r}{r_no} starts.")
-    elif rel == "M":
-        hints.append(f"{event_l}{l_no} starts exactly when {event_r}{r_no} ends.")
-    elif rel == "o":
-        hints.append(
-            f"{event_l}{l_no} starts before {event_r}{r_no} starts and ends after {event_r}{r_no} starts but before {event_r}{r_no} ends."
-        )
-    elif rel == "O":
-        hints.append(
-            f"{event_l}{l_no} starts after {event_r}{r_no} starts but before it ends and ends after {event_r}{r_no} ends."
-        )
-    elif rel == "F":
-        hints.append(
-            f"{event_l}{l_no} starts before {event_r}{r_no} starts and ends exactly when {event_r}{r_no} ends."
-        )
-    elif rel == "f":
-        hints.append(
-            f"{event_l}{l_no} starts after {event_r}{r_no} starts and ends exactly when {event_r}{r_no} ends."
-        )
-    elif rel == "D":
-        hints.append(
-            f"{event_l}{l_no} starts before {event_r}{r_no} starts and ends after {event_r}{r_no} ends."
-        )
-    elif rel == "d":
-        hints.append(
-            f"{event_l}{l_no} starts after {event_r}{r_no} starts and ends before {event_r}{r_no} ends."
-        )
-    elif rel == "s":
-        hints.append(
-            f"{event_l}{l_no} starts exactly when {event_r}{r_no} starts and ends before {event_r}{r_no} ends."
-        )
-    elif rel == "S":
-        hints.append(
-            f"{event_l}{l_no} starts exactly when {event_r}{r_no} starts and ends after {event_r}{r_no} ends."
-        )
-    elif rel == "e":
-        hints.append(
-            f"{event_l}{l_no} starts exactly when {event_r}{r_no} starts and ends exactly when {event_r}{r_no} ends."
-        )
+    template = random.choice(HINT_TEMPLATES[rel])
+    hints.append(
+        template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
+    )
 
     return hints
 
