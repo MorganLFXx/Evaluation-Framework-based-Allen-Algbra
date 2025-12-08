@@ -277,7 +277,7 @@ def get_composition(rel: str):
     compositions = []
     for item in composition_table.items():
         key, value = item
-        if rel in value:
+        if rel in value and value != full:
             compositions.append(item)
     if compositions:
         return random.choice(compositions)
