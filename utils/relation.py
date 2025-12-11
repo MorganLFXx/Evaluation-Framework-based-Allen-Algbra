@@ -285,15 +285,42 @@ def get_composition(rel: str):
         raise ValueError(f"No composition found for relation: {rel}")
 
 
+NEGATION_TEMPLATES = {
+    "p": [],
+    "P": [],
+    "m": [],
+    "M": [],
+    "o": [],
+    "O": [],
+    "F": [],
+    "f": [],
+    "D": [],
+    "d": [],
+    "s": [],
+    "S": [],
+    "e": [],
+}
+
+
 def get_negation(rel: str, l_no: int, r_no: int, events: list) -> list:
     hints = []
     event_l = events[l_no]
     event_r = events[r_no]
+
+    # templates = NEGATION_TEMPLATES.get(rel, [])
+    # random_num = random.randint(1, 10)
+    # if random_num % 2 == 0 or len(templates) == 0:
     hints.append(
         f"It is not true that '{event_l}{l_no}' {allen_relations[rel]} '{event_r}{r_no}' ."
     )
-
     return hints
+
+    # template = random.choice(templates)
+    # hints.append(
+    #     template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
+    # )
+
+    # return hints
 
 
 HINT_TEMPLATES = {
@@ -355,7 +382,7 @@ HINT_TEMPLATES = {
 }
 
 
-def get_hint(rel: str, l_no: int, r_no: int, events: list, is_not: bool) -> list:
+def get_easy_hint(rel: str, l_no: int, r_no: int, events: list, is_not: bool) -> list:
     """Generate hints based on relation and event numbers"""
     hints = []
     event_l = events[l_no]
