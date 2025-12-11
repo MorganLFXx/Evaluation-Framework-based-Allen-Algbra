@@ -1,7 +1,9 @@
+from importlib.abc import ExecutionLoader
+from os import path
 import random
 import argparse
 import json
-from utils.relation import random_relation, get_composition, get_hint
+from utils.relation import random_relation, get_composition, get_easy_hint
 
 
 def random_event_name():
@@ -26,77 +28,55 @@ def random_event_name():
     return random.choice(events_list)
 
 
-def generate_formulas(target, events):
+def generate_formulas(target, events, parent):
     """generate formulas based on target"""
     l_no = target["l"]
     r_no = target["r"]
     # add a new event
     new_event_no = len(events)
-    new_event = random_event_name()
-    events.append(new_event)
-
+    events.append("")
     formulas = []
+
     # choose composition
     composition = get_composition(target["rel"])
     key, value = composition
     rel1, rel2 = key
     # 正确路径
-    formulas.append({"l": l_no, "r": new_event_no, "rel": rel1, "hints": []})
-    formulas.append({"l": new_event_no, "r": r_no, "rel": rel2, "hints": []})
+    formulas.append(
+        {"l": l_no, "r": new_event_no, "rel": rel1, "type": "", "hints": []}
+    )
+    formulas.append(
+        {"l": new_event_no, "r": r_no, "rel": rel2, "type": "not", "hints": []}
+    )
+    path = rel1 + rel2
     # 排除多余路径
+    excluded = ""
     for char in value:
         if char == target["rel"]:
             continue
         formulas.append({"l": l_no, "r": r_no, "rel": char, "type": "not", "hints": []})
+        excluded += char
 
-    return formulas
+    return {
+        "formulas": formulas,
+        "path": {
+            "target": target["rel"],
+            "path": path,
+            "excluded": excluded,
+            "parent": parent,
+            "base_event": [l_no, r_no],
+            "new_event": new_event_no,
+        },
+    }
 
 
-def generate_sample(sample):
-    events = []
-    target = {}
-    formulas = []
+def generate_easy_hints(formulas, events):
     hints = []
-    # 判断是否base sample，生成target
-    if sample is None:
-        for _ in range(2):
-            events.append(random_event_name())
-        l_no = 0
-        r_no = 1
-        target["l"] = l_no
-        target["r"] = r_no
-        target["rel"] = random_relation()
-        formulas = generate_formulas(target, events)
-    else:
-        target = sample["target"].copy()
-        events = sample["events"].copy()
-        # 抽取一个formula用于生成更多formula
-        excluded_formula_no = random.randint(0, len(sample["formulas"]) - 1)
-        # TODO 后面再接着改，用一个not equal+一组composition就可以转换not type了
-        while sample["formulas"][excluded_formula_no]["type"] == "not":
-            excluded_formula_no = random.randint(0, len(sample["formulas"]) - 1)
-        excluded_formula = sample["formulas"][excluded_formula_no]
-        excluded_hints = excluded_formula["hints"]
-        # 排除被抽取的formula
-        original_formulas = []
-        for i, formula in enumerate(sample["formulas"]):
-            if i != excluded_formula_no:
-                original_formulas.append(formula.copy())
-        # 排除被抽取的formula对应的hints
-        original_hints = []
-        for i, hint in enumerate(sample["hints"]):
-            if i not in excluded_hints:
-                original_hints.append(hint)
-        hints = original_hints
-        formulas = generate_formulas(excluded_formula, events)
-        formulas.extend(original_formulas)
-
-    # generate hints
     for i, formula in enumerate(formulas):
         l_no = formula["l"]
         r_no = formula["r"]
         rel = formula["rel"]
-        generated_hints = get_hint(
+        generated_hints = get_easy_hint(
             rel, l_no, r_no, events, formula.get("type") == "not"
         )
         # add hint indices to formula
@@ -105,12 +85,67 @@ def generate_sample(sample):
             hints.append(hint)
             hint_indices.append(len(hints) - 1)
         formulas[i]["hints"] = hint_indices
+    return hints
+
+
+def generate_sample(sample):
+    events = []
+    target = {}
+    formulas = []
+    hints = []
+    paths = []
+    # 判断是否base sample，生成target
+    if sample is None:
+        l_no = 0
+        r_no = 1
+        for _ in range(2):
+            events.append("")
+        target["l"] = l_no
+        target["r"] = r_no
+        target["rel"] = random_relation()
+        parent = -1
+        new_target = target.copy()
+    else:
+        target = sample["target"].copy()
+        events = sample["events"].copy()
+        paths = sample["paths"].copy()
+
+        # 抽取一个formula用于生成更多formula
+        # TODO 后面再接着改，用一个not equal+一组composition就可以转换not type了
+        chosen = []
+        for i, formula in enumerate(sample["formulas"]):
+            if formula["type"] != "not":
+                chosen.append(i)
+        parent = random.choice(chosen)
+        parent_formula = sample["formulas"][parent]
+        excluded_hints = parent_formula["hints"]
+        # 排除被抽取的formula
+        for i, formula in enumerate(sample["formulas"]):
+            if i != parent:
+                formulas.append(formula.copy())
+        # 排除被抽取的formula对应的hints
+        for i, hint in enumerate(sample["hints"]):
+            if i not in excluded_hints:
+                hints.append(hint)
+        new_target = parent_formula.copy()
+
+    # 基于抽取的formula生成更多formula
+    res = generate_formulas(new_target, events, parent)
+    formulas.extend(res["formulas"])
+    # record path info
+    path_info = res["path"]
+    path_info["id"] = len(paths)
+    paths.append(path_info)
+
+    # generate hints TODO
+    hints = generate_easy_hints(formulas, events)
 
     return {
         "target": target,
         "events": events,
         "formulas": formulas,
         "hints": hints,
+        "paths": paths,
     }
 
 
