@@ -1,9 +1,8 @@
-from importlib.abc import ExecutionLoader
-from os import path
 import random
 import argparse
 import json
-from utils.relation import random_relation, get_composition, get_easy_hint
+from utils.relation import random_relation, get_composition
+from generate_hints import generate_negative_hints
 
 
 def random_event_name():
@@ -46,7 +45,7 @@ def generate_formulas(target, events, parent):
         {"l": l_no, "r": new_event_no, "rel": rel1, "type": "", "hints": []}
     )
     formulas.append(
-        {"l": new_event_no, "r": r_no, "rel": rel2, "type": "not", "hints": []}
+        {"l": new_event_no, "r": r_no, "rel": rel2, "type": "", "hints": []}
     )
     path = rel1 + rel2
     # 排除多余路径
@@ -68,24 +67,6 @@ def generate_formulas(target, events, parent):
             "new_event": new_event_no,
         },
     }
-
-
-def generate_easy_hints(formulas, events):
-    hints = []
-    for i, formula in enumerate(formulas):
-        l_no = formula["l"]
-        r_no = formula["r"]
-        rel = formula["rel"]
-        generated_hints = get_easy_hint(
-            rel, l_no, r_no, events, formula.get("type") == "not"
-        )
-        # add hint indices to formula
-        hint_indices = []
-        for hint in generated_hints:
-            hints.append(hint)
-            hint_indices.append(len(hints) - 1)
-        formulas[i]["hints"] = hint_indices
-    return hints
 
 
 def generate_sample(sample):
@@ -111,7 +92,7 @@ def generate_sample(sample):
         paths = sample["paths"].copy()
 
         # 抽取一个formula用于生成更多formula
-        # TODO 后面再接着改，用一个not equal+一组composition就可以转换not type了
+        # TODO not的情况呢
         chosen = []
         for i, formula in enumerate(sample["formulas"]):
             if formula["type"] != "not":
@@ -127,7 +108,7 @@ def generate_sample(sample):
         for i, hint in enumerate(sample["hints"]):
             if i not in excluded_hints:
                 hints.append(hint)
-        new_target = parent_formula.copy()
+        new_target = parent_formula
 
     # 基于抽取的formula生成更多formula
     res = generate_formulas(new_target, events, parent)
@@ -138,7 +119,7 @@ def generate_sample(sample):
     paths.append(path_info)
 
     # generate hints TODO
-    hints = generate_easy_hints(formulas, events)
+    hints = generate_negative_hints(formulas, events)
 
     return {
         "target": target,
