@@ -2,7 +2,7 @@ import random
 import argparse
 import json
 from utils.relation import random_relation, get_composition
-from generate_hints import generate_negative_hints
+from generate_hints import generate_negative_hints, generate_positive_hints
 
 
 def random_event_name():
@@ -118,8 +118,12 @@ def generate_sample(sample):
     path_info["id"] = len(paths)
     paths.append(path_info)
 
+    for i in range(len(events)):
+        if events[i] == "":
+            events[i] = random_event_name()
     # generate hints TODO
-    hints = generate_negative_hints(formulas, events)
+    # hints = generate_negative_hints(formulas, events)
+    hints = generate_positive_hints(formulas, paths, events)
 
     return {
         "target": target,

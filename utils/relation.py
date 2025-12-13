@@ -1,7 +1,5 @@
 import random
 
-# Allen's Interval Algebra relations
-
 allen_relations = {
     "p": "precedes",
     "m": "meets",
@@ -215,58 +213,6 @@ def random_relation() -> str:
     return random.choice(relations)
 
 
-def get_time_relation(A, B) -> str:
-    start_A = A.start_year
-    end_A = A.end_year
-    start_B = B.start_year
-    end_B = B.end_year
-    if end_A < start_B:
-        return "p"  # precedes
-    if start_A > end_B:
-        return "P"  # preceded_by
-    if end_A == start_B:
-        return "m"  # meets
-    if start_A == end_B:
-        return "M"  # met_by
-    if start_A < start_B and end_A > start_B and end_A < end_B:
-        return "o"  # overlaps
-    if start_A > start_B and start_A < end_B and end_A > end_B:
-        return "O"  # overlapped_by
-    if end_A == end_B and start_A < start_B:
-        return "F"  # finished_by
-    if end_A == end_B and start_A > start_B:
-        return "f"  # finishes
-    if start_A < start_B and end_A > end_B:
-        return "D"  # contains
-    if start_A > start_B and end_A < end_B:
-        return "d"  # during
-    if start_A == start_B and end_A < end_B:
-        return "s"  # starts
-    if start_A == start_B and end_A > end_B:
-        return "S"  # started_by
-    if start_A == start_B and end_A == end_B:
-        return "e"  # equals
-    else:
-        print(start_A, end_A, start_B, end_B)
-        raise ValueError(
-            "Unable to determine the relation between the given intervals."
-        )
-
-
-def is_transitive_relation(rel: str) -> bool:
-    """Check if the given Allen's interval relation is transitive."""
-    transitive_relations = {"p", "P", "e", "s", "S", "f", "F", "d", "D"}
-    return rel in transitive_relations
-
-
-def random_transitive_relation() -> str:
-    """Generate a random transitive Allen's interval relation."""
-    import random
-
-    transitive_relations = ["p", "P", "s", "S", "f", "F", "d", "D"]
-    return random.choice(transitive_relations)
-
-
 def get_inverse_relation(rel: str) -> str:
     """Get the inverse of the given Allen's interval relation."""
     return rel.swapcase()
@@ -283,119 +229,6 @@ def get_composition(rel: str):
         return random.choice(compositions)
     else:
         raise ValueError(f"No composition found for relation: {rel}")
-
-
-NEGATION_TEMPLATES = {
-    "p": [],
-    "P": [],
-    "m": [],
-    "M": [],
-    "o": [],
-    "O": [],
-    "F": [],
-    "f": [],
-    "D": [],
-    "d": [],
-    "s": [],
-    "S": [],
-    "e": [],
-}
-
-
-def get_negation(rel: str, l_no: int, r_no: int, events: list) -> list:
-    hints = []
-    event_l = events[l_no]
-    event_r = events[r_no]
-
-    # templates = NEGATION_TEMPLATES.get(rel, [])
-    # random_num = random.randint(1, 10)
-    # if random_num % 2 == 0 or len(templates) == 0:
-    hints.append(
-        f"It is not true that '{event_l}{l_no}' {allen_relations[rel]} '{event_r}{r_no}' ."
-    )
-    return hints
-
-    # template = random.choice(templates)
-    # hints.append(
-    #     template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
-    # )
-
-    # return hints
-
-
-HINT_TEMPLATES = {
-    "p": [
-        "'{event_l}{l_no}' ends before '{event_r}{r_no}' starts.",
-        "Some time after '{event_l}{l_no}' ended, '{event_r}{r_no}' occurred.",
-        "After '{event_l}{l_no}' had been underway for some time, Tom finally made up his mind to initiate '{event_r}{r_no}'.",
-        "'{event_l}{l_no}' concluded ahead of '{event_r}{r_no}' kicking off.",
-        "There was a gap between the finish of '{event_l}{l_no}' and the start of '{event_r}{r_no}'.",
-    ],
-    "P": [
-        "'{event_l}{l_no}' starts after '{event_r}{r_no}' ends.",
-        "'{event_r}{r_no}' ended before '{event_l}{l_no}' started.",
-    ],
-    "m": [
-        "'{event_l}{l_no}' ends exactly when '{event_r}{r_no}' starts.",
-        "'{event_r}{r_no}' began the moment '{event_l}{l_no}' wrapped up.",
-    ],
-    "M": [
-        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' ends.",
-        "'{event_l}{l_no}' commenced right as '{event_r}{r_no}' wrapped up.",
-    ],
-    "o": [
-        "'{event_l}{l_no}' starts before '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' starts but before '{event_r}{r_no}' ends.",
-        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap in time. But '{event_l}{l_no}' starts first.",
-    ],
-    "O": [
-        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts but before it ends and ends after '{event_r}{r_no}' ends.",
-        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap in time. But '{event_r}{r_no}' starts first.",
-    ],
-    "F": [
-        "'{event_l}{l_no}' ends exactly when '{event_r}{r_no}' ends, but starts before '{event_r}{r_no}' starts.",
-        "'{event_l}{l_no}' finishes at the same time as '{event_l}{l_no}' but began earlier.",
-    ],
-    "f": [
-        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts and ends exactly when '{event_r}{r_no}' ends."
-        "'{event_l}{l_no}' finishes at the same time as '{event_r}{r_no}' but began earlier.",
-    ],
-    "D": [
-        "'{event_l}{l_no}' starts before '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' ends."
-        "During '{event_l}{l_no}', '{event_r}{r_no}' started and ended."
-    ],
-    "d": [
-        "'{event_l}{l_no}' starts after '{event_r}{r_no}' starts and ends before '{event_r}{r_no}' ends."
-        "The duration of '{event_l}{l_no}' is part of the duration of '{event_r}{r_no}'."
-    ],
-    "s": [
-        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends before '{event_r}{r_no}' ends."
-        "'{event_l}{l_no}' starts at the same time as '{event_r}{r_no}' but ends later."
-    ],
-    "S": [
-        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends after '{event_r}{r_no}' ends."
-        "'{event_l}{l_no}' starts at the same time as '{event_r}{r_no}' but ends earlier."
-    ],
-    "e": [
-        "'{event_l}{l_no}' starts exactly when '{event_r}{r_no}' starts and ends exactly when '{event_r}{r_no}' ends."
-        "'{event_l}{l_no}' and '{event_r}{r_no}' overlap completely in time."
-    ],
-}
-
-
-def get_easy_hint(rel: str, l_no: int, r_no: int, events: list, is_not: bool) -> list:
-    """Generate hints based on relation and event numbers"""
-    hints = []
-    event_l = events[l_no]
-    event_r = events[r_no]
-    if is_not:
-        return get_negation(rel, l_no, r_no, events)
-
-    template = random.choice(HINT_TEMPLATES[rel])
-    hints.append(
-        template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
-    )
-
-    return hints
 
 
 def main():
