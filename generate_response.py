@@ -8,10 +8,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 allen_helper = """You are an expert in time relation judgment, well-versed in Allen's interval algebra.
 This mathematical framework defines 13 fundamental types of temporal relationships：
 precedes(p), preceded_by(P), meets(m), met_by(M), overlaps(o), overlapped_by(O), finished_by(F), finishes(f), contains(D), during(d), starts(s), started_by(S), equals(e).
-Here are some things to note: 1. 'A overlaps B' means that there is overlap between A and B but A starts before B 2. 'starts' means A and B start at the same time but A ends before B 3. 'finishes' means A and B end at the same time but A starts after B.
-The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts.
+Here are some things to note: 
+1. 'A overlaps B' means that there is overlap between A and B but A starts before B. 'A overlapped_by B' means A and B still overlap, but B starts before A. 
+2. 'A starts B' means A and B start at the same time but A ends before B. 'A started_by B' means A and B start at the same time but B ends before A.
+3. 'finishes' means A and B end at the same time but A starts after B. 'finished_by' means A and B end at the same time but B starts after A.
 The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
 """
+# TIME_GRANULARITY = "The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts."
+
+# few_shot_examples = """Here are an example:
+
+# """
 
 post_question = """I will provide all hints step by step. 
 Each time, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
@@ -24,7 +31,7 @@ def multi_chat(sample):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
-    question = f"Please help me determine the allen relationship between {sample["events"][l]}{l} and {sample["events"][r]}{r} based on following hints."
+    question = f"Please help me determine the allen relationship between '{sample["events"][l]}{l}' and '{sample["events"][r]}{r}' based on following hints."
     hints = sample["hints"]
     messages = [
         {"role": "system", "content": allen_helper},
@@ -48,18 +55,18 @@ def single_chat(sample):
     r = sample["target"]["r"]
     answers = []
     hints = sample["hints"]
-    question = f"Please help me determine the allen relationship between {sample["events"][l]}{l} and {sample["events"][r]}{r} based on following hints."
+    question = f"Please help me determine the allen relationship between '{sample["events"][l]}{l}' and '{sample["events"][r]}{r}' based on following hints."
     question += post_question + "\n"
     for i in range(len(hints)):
-        question += hints[i]
-        messages = [
-            {"role": "system", "content": allen_helper},
-            {"role": "user", "content": question},
-        ]
-        result = call_pony_api(messages)
-        # print(result)
-        answers.append(result)
-        sleep(1)
+        question += f"{i+1}.{hints[i]}\n"
+    messages = [
+        {"role": "system", "content": allen_helper},
+        {"role": "user", "content": question},
+    ]
+    result = call_pony_api(messages)
+    # print(result)
+    answers.append(result)
+    sleep(1)
     return answers
 
 
@@ -141,6 +148,7 @@ def main():
         }
 
     remaining_indices = [i for i in range(len(samples)) if i not in processed_indices]
+    processed_since_last_dump = 0
 
     if remaining_indices:
         max_workers = max(1, args.workers)
@@ -160,13 +168,19 @@ def main():
                     answers = future.result()
                     samples[index][answer_key] = answers
                     processed_indices.add(index)
-                    dump_progress(samples, processed_indices, temp_path)
+                    processed_since_last_dump += 1
+                    if processed_since_last_dump >= 10:
+                        dump_progress(samples, processed_indices, temp_path)
+                        processed_since_last_dump = 0
                 except Exception as e:
                     print(f"  ❌ 第 {index + 1} 个用例出错: {e}")
                     dump_progress(samples, processed_indices, temp_path)
                     raise
     else:
         print("所有用例已处理完成")
+
+    if processed_since_last_dump > 0 and remaining_indices:
+        dump_progress(samples, processed_indices, temp_path)
 
     with open(f"datasets/{args.name}_with_answers.json", "w") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
