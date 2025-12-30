@@ -4,6 +4,7 @@ import os
 from utils.chat import call_pony_api
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 allen_helper = """You are an expert in time relation judgment, well-versed in Allen's interval algebra.
 This mathematical framework defines 13 fundamental types of temporal relationships：
@@ -16,12 +17,28 @@ The correspondence between uppercase and lowercase letters of the same letter is
 """
 # TIME_GRANULARITY = "The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts."
 
-# few_shot_examples = """Here are an example:
+few_shot_examples = """Here are an example:
+Target: 0 precedes 1
+Hints: 
+1.‘0’ and ‘2’ overlap in time. But ‘0’ starts first.
+2.‘2’ finishes at the same time as ‘1’ but began earlier.
+3.There is no overlap between ‘0’ and ‘1’
+4.There is no point in time when both events ‘0’ and ‘1’ are occurring
 
-# """
+Answer:
+Hint 1 means 0 overlaps 2.
+Hint 2 means 2 finished_by 1.
+So, by combining hint 1 and hint 2, we can deduce that the relationship between 0 and 1 can be described in the following ways:
+- 0 precedes 1 (p)
+- 0 meets 1 (m)
+- 0 finished_by 1 (o)
+Then, hint 3 states that there is no overlap between '0' and '1', which eliminates the possibilities of '0 overlaps 1 (o)'.
+Then, hint 4 states that there is no point in time when both events '0' and '1' are occurring, which eliminates the possibilities of '0 meets 1 (m)'.
+So the only possible relationship left is '0 precedes 1 (p)'.
+"""
 
 post_question = """I will provide all hints step by step. 
-Each time, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
+For each hint, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
 Remember no need to provide me with the thought process. Just provide your thoughtfully considered answer.
 If there are more than six possibilities, you only need to answer 'I can not determine'.
 """
@@ -31,10 +48,13 @@ def multi_chat(sample):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
-    question = f"Please help me determine the allen relationship between '{sample["events"][l]}{l}' and '{sample["events"][r]}{r}' based on following hints."
+    question = (
+        f"Please help me determine the allen relationship between '\n"
+        f"{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following hints."
+    )
     hints = sample["hints"]
     messages = [
-        {"role": "system", "content": allen_helper},
+        {"role": "system", "content": allen_helper + few_shot_examples},
     ]
     question += post_question + "\n"
     for i in range(len(hints)):
@@ -55,7 +75,10 @@ def single_chat(sample):
     r = sample["target"]["r"]
     answers = []
     hints = sample["hints"]
-    question = f"Please help me determine the allen relationship between '{sample["events"][l]}{l}' and '{sample["events"][r]}{r}' based on following hints."
+    question = (
+        "Please help me determine the allen relationship between "
+        f"'{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following hints steps by steps."
+    )
     question += post_question + "\n"
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
@@ -98,7 +121,6 @@ def dump_progress(samples, processed_indices, temp_path):
 
 
 def main():
-    temp_path = "datasets/temp_response.json"
     parser = argparse.ArgumentParser(description="Run script with parameters")
     parser.add_argument("--name", type=str, help="需要生成答案的文件名")
     parser.add_argument(
@@ -121,66 +143,57 @@ def main():
         samples = json.load(open(f"datasets/{args.name}.json", "r"))
 
     answer_key = f"answer_{args.chat_type}"
-    processed_indices = set()
+    temp_path = f"datasets/temp_response_{args.name}.json"
+    # if os.path.exists(temp_path):
+    #     os.remove(temp_path)
 
-    if os.path.exists(temp_path):
-        with open(temp_path, "r", encoding="utf-8") as f:
-            temp_data = json.load(f)
-            samples = temp_data["samples"]
-            processed_indices.update(temp_data.get("completed_indices", []))
-            next_index_hint = temp_data.get("next_index")
-            if next_index_hint is not None and not temp_data.get("completed_indices"):
-                processed_indices.update(range(next_index_hint))
-        processed_indices.update(
-            index for index, sample in enumerate(samples) if answer_key in sample
-        )
-        next_unprocessed = next(
-            (i for i in range(len(samples)) if i not in processed_indices),
-            len(samples),
-        )
-        if next_unprocessed < len(samples):
-            print(f"从临时文件恢复，继续从第 {next_unprocessed + 1} 个用例开始")
-        else:
-            print("临时文件表明所有用例已完成")
-    else:
-        processed_indices = {
-            index for index, sample in enumerate(samples) if answer_key in sample
-        }
-
+    processed_indices = {
+        index for index, sample in enumerate(samples) if answer_key in sample
+    }
     remaining_indices = [i for i in range(len(samples)) if i not in processed_indices]
-    processed_since_last_dump = 0
 
     if remaining_indices:
-        max_workers = max(1, args.workers)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_index = {
-                executor.submit(
-                    process_sample,
-                    index,
-                    samples[index],
-                    args.chat_type,
-                ): index
-                for index in remaining_indices
-            }
-            for future in as_completed(future_to_index):
-                index = future_to_index[future]
+        worker_count = max(1, args.workers)
+        assignments = [[] for _ in range(worker_count)]
+        for index in remaining_indices:
+            assignments[index % worker_count].append(index)
+
+        progress_lock = Lock()
+
+        def worker_task(worker_id, indices):
+            local_processed = 0
+            for index in indices:
                 try:
-                    answers = future.result()
+                    answers = process_sample(index, samples[index], args.chat_type)
+                except Exception as e:
+                    with progress_lock:
+                        dump_progress(samples, processed_indices, temp_path)
+                    print(f"  ❌ 线程 {worker_id + 1} 处理第 {index + 1} 个用例出错: {e}")
+                    raise
+
+                with progress_lock:
                     samples[index][answer_key] = answers
                     processed_indices.add(index)
-                    processed_since_last_dump += 1
-                    if processed_since_last_dump >= 10:
+
+                local_processed += 1
+                if local_processed % 5 == 0:
+                    with progress_lock:
                         dump_progress(samples, processed_indices, temp_path)
-                        processed_since_last_dump = 0
-                except Exception as e:
-                    print(f"  ❌ 第 {index + 1} 个用例出错: {e}")
+
+            if local_processed % 5 != 0 and local_processed > 0:
+                with progress_lock:
                     dump_progress(samples, processed_indices, temp_path)
-                    raise
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = [
+                executor.submit(worker_task, worker_id, indices)
+                for worker_id, indices in enumerate(assignments)
+                if indices
+            ]
+            for future in as_completed(futures):
+                future.result()
     else:
         print("所有用例已处理完成")
-
-    if processed_since_last_dump > 0 and remaining_indices:
-        dump_progress(samples, processed_indices, temp_path)
 
     with open(f"datasets/{args.name}_with_answers.json", "w") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
