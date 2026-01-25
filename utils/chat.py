@@ -38,11 +38,17 @@ def call_pony_api(messages) -> str:
     )
     try:
         response = client.chat.completions.create(
-            model="glm-4.6",  # 替换为您要使用的模型名称
+            # model="glm-4.6",  # 替换为您要使用的模型名称
+            # model="qwen3-next-80b-a3b-instruct",
+            model="qwen3-32b",
             messages=messages,
             temperature=0,
-            max_tokens=10000,
+            max_tokens=30000,
             stream=False,
+            timeout=300,  # 5分钟超时
+            extra_body={
+                "chat_template_kwargs": {"thinking": True}
+            },  # 默认关闭思考，可通过此配置开启思考（如果需要工具调用，请关闭思考）
         )
     except Exception as e:
         raise Exception(f"API调用失败: {str(e)}")
@@ -101,20 +107,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""多次对话
-PMO -> PM -> P
-osd -> contradiction
-PO -> P -> P
-pmO -> pm -> contradiction
-PMO -> PM -> contradiction
-PO -> PM -> PM
-osd -> contradiction
-"""
-
-"""单次问答
-PMO -> (osd->contradiction) -> (osd->contradiction) 
-PMO -> (osd->pPmM) -> (osd -> contradiction)
-osd -> (爆token限制了) -> (PO -> PM -> P)
-PMOSD -> (PO->P) -> contradiction
-"""
