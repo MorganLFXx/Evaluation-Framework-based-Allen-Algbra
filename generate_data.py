@@ -6,20 +6,28 @@ from utils.db import get_event_by_rel
 from generate_hints import generate_negative_hints, generate_positive_hints
 
 
-def random_event_name():
+def random_event_name(used_names=None):
     # year events
     events_list = [
         "regional war",
         "siege",
-        "revolution",
+        "government revolution",
         "engineering project",
         "invention process",
         "construction",
         "book writing",
         "tour to study",
         "long-term travel",
-        ""
+        "long-distance migration",
     ]
+    if used_names is not None:
+        available = [e for e in events_list if e not in used_names]
+        if available:
+            name = random.choice(available)
+        else:
+            name = f"{random.choice(events_list)}_{len(used_names)}"
+        used_names.add(name)
+        return name
     return random.choice(events_list)
 
 
@@ -132,9 +140,10 @@ def generate_sample(sample):
 
 def generate_data(sample):
     events = sample["events"]
+    used_names = set(e for e in events if e != "")
     for i in range(len(events)):
         if events[i] == "":
-            events[i] = random_event_name()
+            events[i] = random_event_name(used_names)
 
     sample["hints"] = generate_negative_hints(sample["formulas"], events)
     # sample["hints"] = generate_positive_hints(
@@ -214,9 +223,10 @@ def main_all_base():
 
     for sample in samples:
         events = sample["events"]
+        used_names = set(e for e in events if e != "")
         for i in range(len(events)):
             if events[i] == "":
-                events[i] = random_event_name()
+                events[i] = random_event_name(used_names)
 
         sample["hints"] = generate_negative_hints(sample["formulas"], events)
         sample["id"] = samples.index(sample)
