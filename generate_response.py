@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import glob
 from utils.chat import call_pony_api
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -86,7 +87,10 @@ def single_chat(sample):
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
     ]
-    result = call_pony_api(messages)
+    try:
+        result = call_pony_api(messages)
+    except Exception as e:
+        result = "API调用失败"
     # print(result)
     answers.append(result)
     sleep(1)
@@ -102,22 +106,86 @@ def process_sample(index, sample, chat_type):
     raise ValueError(f"Unsupported chat_type: {chat_type}")
 
 
-def dump_progress(samples, processed_indices, temp_path):
-    next_index = next(
-        (i for i in range(len(samples)) if i not in processed_indices),
-        len(samples),
-    )
-    with open(temp_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {
-                "samples": samples,
-                "next_index": next_index,
-                "completed_indices": sorted(processed_indices),
-            },
-            f,
-            indent=4,
-            ensure_ascii=False,
-        )
+def _atomic_dump_json(path: str, data) -> None:
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+    os.replace(tmp_path, path)
+
+
+def _ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
+
+
+def _split_indices_contiguous(total: int, workers: int):
+    """Split [0, total) into contiguous blocks.
+
+    n = total // workers
+    thread 0 -> [0, n)
+    thread 1 -> [n, 2n)
+    ...
+    last thread -> [k*n, total)
+    """
+    if total <= 0:
+        return []
+    workers = max(1, workers)
+    n = total // workers
+    slices = []
+    for worker_id in range(workers):
+        start = worker_id * n
+        end = (worker_id + 1) * n if worker_id < workers - 1 else total
+        if start >= total:
+            break
+        if end < start:
+            end = start
+        slices.append((worker_id, start, end))
+    return slices
+
+
+def _recover_answers_from_temp(
+    samples, answer_key: str, output_dir: str, name: str
+) -> int:
+    """Recover already-generated answers from per-thread temp files.
+
+    Expected temp format (per line-item):
+    - {"index": i, "sample": { ... , answer_key: ... }}
+    - {"index": i, "skipped": true, "error": "..."}
+
+    Only entries containing a valid `sample[answer_key]` are restored.
+    """
+    pattern = os.path.join(output_dir, f"{name}_*.json")
+    paths = sorted(glob.glob(pattern))
+    if not paths:
+        return 0
+
+    restored = 0
+    for path in paths:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        if not isinstance(data, list):
+            continue
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            index = item.get("index")
+            if not isinstance(index, int) or not (0 <= index < len(samples)):
+                continue
+            sample_obj = item.get("sample")
+            if not isinstance(sample_obj, dict):
+                continue
+            if answer_key not in sample_obj:
+                continue
+
+            # Only update the answer field to avoid overwriting other fields.
+            samples[index][answer_key] = sample_obj[answer_key]
+            restored += 1
+
+    return restored
 
 
 def main():
@@ -136,70 +204,102 @@ def main():
         default=1,
         help="并行调用线程数",
     )
+    parser.add_argument(
+        "--merge_only",
+        action="store_true",
+        help="只从temp恢复并整合输出，不再调用API",
+    )
     args = parser.parse_args()
-    if os.path.exists(f"datasets/{args.name}_with_answers.json"):
-        samples = json.load(open(f"datasets/{args.name}_with_answers.json", "r"))
-    else:
-        samples = json.load(open(f"datasets/{args.name}.json", "r"))
+
+    samples = json.load(open(f"datasets/{args.name}.json", "r"))
 
     answer_key = f"answer_{args.chat_type}"
-    temp_path = f"datasets/temp_response_{args.name}.json"
-    # if os.path.exists(temp_path):
-    #     os.remove(temp_path)
+
+    output_dir = f"datasets/temp/{args.name}"
+    _ensure_dir(output_dir)
+
+    # 从 temp 恢复已生成的答案（用于异常终止后的断点续跑）
+    restored = _recover_answers_from_temp(samples, answer_key, output_dir, args.name)
+    if restored:
+        print(f"已从temp恢复答案条目: {restored}")
 
     processed_indices = {
         index for index, sample in enumerate(samples) if answer_key in sample
     }
-    remaining_indices = [i for i in range(len(samples)) if i not in processed_indices]
+    if processed_indices:
+        print(f"已存在答案的样本数: {len(processed_indices)} / {len(samples)}")
 
-    if remaining_indices:
-        worker_count = max(1, args.workers)
-        assignments = [[] for _ in range(worker_count)]
-        for index in remaining_indices:
-            assignments[index % worker_count].append(index)
+    if args.merge_only:
+        final_path = f"datasets/{args.name}_with_answers.json"
+        with open(final_path, "w", encoding="utf-8") as f:
+            json.dump(samples, f, indent=4, ensure_ascii=False)
+        print(f"已完成整合并保存到 {final_path}")
+        return
 
-        progress_lock = Lock()
+    total = len(samples)
+    worker_count = max(1, args.workers)
+    slices = _split_indices_contiguous(total, worker_count)
+    if not slices:
+        print("输入数据为空")
+        return
 
-        def worker_task(worker_id, indices):
-            local_processed = 0
-            for index in indices:
-                try:
-                    answers = process_sample(index, samples[index], args.chat_type)
-                except Exception as e:
-                    with progress_lock:
-                        dump_progress(samples, processed_indices, temp_path)
-                    print(f"  ❌ 线程 {worker_id + 1} 处理第 {index + 1} 个用例出错: {e}")
-                    raise
+    progress_lock = Lock()
 
+    def worker_task(worker_id: int, start: int, end: int):
+        thread_no = worker_id + 1
+        thread_out_path = os.path.join(output_dir, f"{args.name}_{thread_no}.json")
+        thread_results = []
+
+        # If file already exists, load it so we can continue appending.
+        if os.path.exists(thread_out_path):
+            try:
+                with open(thread_out_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                if isinstance(existing, list):
+                    thread_results = existing
+            except Exception:
+                thread_results = []
+
+        print(f"线程 {thread_no} 负责区间: [{start}, {end})")
+
+        for index in range(start, end):
+            if index in processed_indices:
+                continue
+
+            try:
+                answers = process_sample(index, samples[index], args.chat_type)
                 with progress_lock:
                     samples[index][answer_key] = answers
                     processed_indices.add(index)
 
-                local_processed += 1
-                if local_processed % 5 == 0:
-                    with progress_lock:
-                        dump_progress(samples, processed_indices, temp_path)
+                thread_results.append({"index": index, "sample": samples[index]})
+                _atomic_dump_json(thread_out_path, thread_results)
+            except Exception as e:
+                # 错误处理：遇到错误跳过即可
+                print(
+                    f"  ❌ 线程 {thread_no} 处理第 {index + 1} 个用例出错，已跳过: {e}"
+                )
+                thread_results.append(
+                    {"index": index, "skipped": True, "error": str(e)}
+                )
+                _atomic_dump_json(thread_out_path, thread_results)
+                continue
 
-            if local_processed % 5 != 0 and local_processed > 0:
-                with progress_lock:
-                    dump_progress(samples, processed_indices, temp_path)
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(worker_task, worker_id, start, end)
+            for worker_id, start, end in slices
+            if end > start
+        ]
+        for future in as_completed(futures):
+            future.result()
 
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            futures = [
-                executor.submit(worker_task, worker_id, indices)
-                for worker_id, indices in enumerate(assignments)
-                if indices
-            ]
-            for future in as_completed(futures):
-                future.result()
-    else:
-        print("所有用例已处理完成")
-
-    with open(f"datasets/{args.name}_with_answers.json", "w") as f:
+    # 答案整合：所有线程都处理完后，输出最终答案文件
+    final_path = f"datasets/{args.name}_with_answers.json"
+    with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
-    if os.path.exists(temp_path):
-        os.remove(temp_path)
-    print(f"Generated answers and saved to {args.name}_with_answers.json")
+
+    print(f"Generated answers and saved to {final_path}")
 
 
 if __name__ == "__main__":
