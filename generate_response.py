@@ -45,7 +45,7 @@ If there are more than six possibilities, you only need to answer 'I can not det
 """
 
 
-def multi_chat(sample):
+def multi_chat(sample, model):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
@@ -63,7 +63,7 @@ def multi_chat(sample):
             messages.append({"role": "user", "content": question + hints[i]})
         else:
             messages.append({"role": "user", "content": hints[i]})
-        result = call_pony_api(messages)
+        result = call_pony_api(messages, model)
         # print(result)
         messages.append({"role": "assistant", "content": result})
         answers.append(result)
@@ -71,7 +71,7 @@ def multi_chat(sample):
     return answers
 
 
-def single_chat(sample):
+def single_chat(sample, model):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
@@ -84,11 +84,11 @@ def single_chat(sample):
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
     messages = [
-        {"role": "system", "content": allen_helper},
+        {"role": "system", "content": allen_helper + few_shot_examples},
         {"role": "user", "content": question},
     ]
     try:
-        result = call_pony_api(messages)
+        result = call_pony_api(messages, model)
     except Exception as e:
         result = "API调用失败"
     # print(result)
@@ -97,12 +97,12 @@ def single_chat(sample):
     return answers
 
 
-def process_sample(index, sample, chat_type):
+def process_sample(index, sample, chat_type, model):
     print(f"== 正在处理第 {index + 1} 个用例 ==")
     if chat_type == "multi":
-        return multi_chat(sample)
+        return multi_chat(sample, model)
     if chat_type == "single":
-        return single_chat(sample)
+        return single_chat(sample, model)
     raise ValueError(f"Unsupported chat_type: {chat_type}")
 
 
@@ -209,6 +209,12 @@ def main():
         action="store_true",
         help="只从temp恢复并整合输出，不再调用API",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="调用的模型名称",
+    )
     args = parser.parse_args()
 
     samples = json.load(open(f"datasets/{args.name}.json", "r"))
@@ -267,7 +273,9 @@ def main():
                 continue
 
             try:
-                answers = process_sample(index, samples[index], args.chat_type)
+                answers = process_sample(
+                    index, samples[index], args.chat_type, args.model
+                )
                 with progress_lock:
                     samples[index][answer_key] = answers
                     processed_indices.add(index)

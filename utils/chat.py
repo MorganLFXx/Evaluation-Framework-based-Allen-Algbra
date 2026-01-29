@@ -32,23 +32,24 @@ def call_zhipu_api(query: str) -> str:
         raise Exception(f"API调用失败: {response.status_code}, {response.text}")
 
 
-def call_pony_api(messages) -> str:
+def call_pony_api(messages, call_model) -> str:
     client = OpenAI(
         base_url="https://api.tokenpony.cn/v1", api_key=pony_apikey  # 替换为您的API Key
     )
     try:
         response = client.chat.completions.create(
-            # model="glm-4.6",  # 替换为您要使用的模型名称
+            # model="glm-4.6",  
             # model="qwen3-next-80b-a3b-instruct",
-            model="qwen3-32b",
+            # model="deepseek-v3.2",
+            # model="qwen3-32b",
+            # model="qwen3-8b",
+            model=call_model,
             messages=messages,
             temperature=0,
-            max_tokens=30000,
+            max_tokens=20000,
             stream=False,
             timeout=300,  # 5分钟超时
-            extra_body={
-                "chat_template_kwargs": {"thinking": True}
-            },  # 默认关闭思考，可通过此配置开启思考（如果需要工具调用，请关闭思考）
+            extra_body={"chat_template_kwargs": {"thinking": True}},
         )
     except Exception as e:
         raise Exception(f"API调用失败: {str(e)}")
