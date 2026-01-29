@@ -23,9 +23,10 @@ def main():
             level2 += 1
             level2_true += check
             if check == 0:
-                print(
-                    f"错误样例: target={item['target']['rel']}, answer={item['answer_single'][0].strip()}"
-                )
+                answer = item["answer_single"][0].strip()
+                if answer.startswith("<think>"):
+                    answer = "None"
+                print(f"错误样例: target={item['target']['rel']}, answer={answer}")
                 i += 1
         # if i > 10:
         # break
