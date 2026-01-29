@@ -3,7 +3,7 @@ import argparse
 import json
 from utils.relation import random_relation, get_composition
 from utils.db import get_event_by_rel
-from generate_hints import generate_negative_hints, generate_positive_hints
+from generate_hints import generate_hints
 
 
 def random_event_name(used_names=None):
@@ -31,57 +31,39 @@ def random_event_name(used_names=None):
     return random.choice(events_list)
 
 
-def generate_formulas(target, events, parent):
-    """generate formulas based on target"""
+def generate_path(target, events, parent):
+    """generate paths based on target"""
     l_no = target["l"]
     r_no = target["r"]
     # add a new event
     new_event_no = len(events)
     events.append("")
-    formulas = []
 
     # choose composition
     composition = get_composition(target["rel"])
-    key, value = composition
+    key, value = composition  # e.g.: (p,p):p
     rel1, rel2 = key
-    # 正确路径
-    formulas.append(
-        {"l": l_no, "r": new_event_no, "rel": rel1, "type": "", "hints": []}
-    )
-    formulas.append(
-        {"l": new_event_no, "r": r_no, "rel": rel2, "type": "", "hints": []}
-    )
-    path = rel1 + rel2
-    # 排除多余路径
-    excluded = ""
-    for char in value:
-        if char == target["rel"]:
-            continue
-        formulas.append({"l": l_no, "r": r_no, "rel": char, "type": "not", "hints": []})
-        excluded += char
-
+    path = [rel1, rel2]
+    excluded = [rel for rel in value if rel != target["rel"]]
     return {
-        "formulas": formulas,
-        "path": {
-            "target": target["rel"],
-            "path": path,
-            "excluded": excluded,
-            "parent": parent,
-            "base_event": [l_no, r_no],
-            "new_event": new_event_no,
-        },
+        "target": target["rel"],
+        "path": path,
+        "excluded": excluded,
+        "parent": parent,
+        "left": -1,
+        "right": -1,
+        "base_event": [l_no, r_no],
+        "new_event": new_event_no,
     }
 
 
-def generate_sample(sample):
+def generate_tree(sample):
     events = sample["events"] if sample else []
     target = sample["target"] if sample else {}
-    formulas = []
     paths = sample["paths"] if sample else []
     # 判断是否base sample，生成target
     if sample is None:
-        l_no = 0
-        r_no = 1
+        l_no, r_no = 0, 1
         for _ in range(2):
             events.append("")
         target["l"] = l_no
@@ -90,100 +72,63 @@ def generate_sample(sample):
         parent = -1
         new_target = target.copy()
     else:
-        # 抽取一个formula用于生成更多formula
-        # TODO not的情况呢
-        chosen = []
-        for i, formula in enumerate(sample["formulas"]):
-            if formula["type"] != "not":
-                chosen.append(i)
-        parent = random.choice(chosen)
-        new_target = sample["formulas"][parent].copy()
+        # 抽取父节点
+        parent = random.randint(0, len(paths) - 1)
+        while paths[parent]["left"] != -1 and paths[parent]["right"] != -1:
+            parent = random.randint(0, len(paths) - 1)
+        cur_path = paths[parent]
 
-    # 基于抽取的formula生成更多formula
-    res = generate_formulas(new_target, events, parent)
-    if sample is None:
-        formulas.extend(res["formulas"])
-    else:
-        for i in range(0, parent):
-            formulas.append(sample["formulas"][i].copy())
-        formulas.extend(res["formulas"])
-        for i in range(parent + 1, len(sample["formulas"])):
-            formulas.append(sample["formulas"][i].copy())
-    # record path info
-    path_info = res["path"]
-    path_info["id"] = len(paths)
-    paths.append(path_info)
+        # 确认左右节点位置
+        if cur_path["left"] != -1:
+            child_side = "right"
+        elif cur_path["right"] != -1:
+            child_side = "left"
+        else:
+            child_side = random.choice(["left", "right"])
+        cur_path[child_side] = len(paths)
 
-    # for i in range(len(events)):
-    #     if events[i] == "":
-    #         events[i] = random_event_name()
-    # generate hints TODO
-    # hints = generate_negative_hints(formulas, events)
-    # hints = generate_positive_hints(formulas, paths, events)
+        new_target = {}
+        new_target["l"] = (
+            cur_path["base_event"][0] if child_side == "left" else cur_path["new_event"]
+        )
+        new_target["r"] = (
+            cur_path["new_event"] if child_side == "left" else cur_path["base_event"][1]
+        )
+        new_target["rel"] = (
+            cur_path["path"][0] if child_side == "left" else cur_path["path"][1]
+        )
+
+    new_path = generate_path(new_target, events, parent)
+    paths.append(new_path)
 
     return {
         "target": target,
         "events": events,
-        "formulas": formulas,
         "paths": paths,
     }
 
 
 """
+# get tree
 1. 判断是否base
 2. 生成target (new/complex)
-3. 基于target生成formulas(这步应该抽象出来)
-3.5. 补充到原来的formulas
-4. 生成hints (补充到原来的hints)
+3. 基于target生成paths(补充formulas留到递归生成结束)
+
+# get hints
+1. 补充formulas(?)
+2. 生成hints (补充到原来的hints)
 """
 
 
-def generate_data(sample):
+def generate_data(sample, hint_type):
     events = sample["events"]
     used_names = set(e for e in events if e != "")
     for i in range(len(events)):
         if events[i] == "":
             events[i] = random_event_name(used_names)
 
-    sample["hints"] = generate_negative_hints(sample["formulas"], events)
-    # sample["hints"] = generate_positive_hints(
-    #     sample["formulas"], sample["paths"], events
-    # )
-
+    sample["hints"] = generate_hints(sample["paths"], events, hint_type)
     return sample
-
-
-def generate_all_base_samples():
-    from utils.relation import full, composition_table
-
-    samples = []
-    rels = [rel for rel in full]
-    for i in range(len(rels)):
-        for j in range(len(rels)):
-            compose = composition_table.get((rels[i], rels[j]))
-            if compose == full:
-                continue
-            for c in compose:
-                target = {"l": 0, "r": 1, "rel": c}
-                formulas = [
-                    {"l": 0, "r": 2, "rel": rels[i], "type": "", "hints": []},
-                    {"l": 2, "r": 1, "rel": rels[j], "type": "", "hints": []},
-                ]
-                for k in compose:
-                    if k != c:
-                        formulas.append(
-                            {"l": 0, "r": 1, "rel": k, "type": "not", "hints": []}
-                        )
-                sample = {
-                    "target": target,
-                    "events": ["", "", ""],
-                    "formulas": formulas,
-                }
-                samples.append(sample)
-
-    with open(f"datasets/all_base_samples.json", "w") as f:
-        json.dump(samples, f, indent=4, ensure_ascii=False)
-    print(f"Generated {len(samples)} base samples and saved to all_base_samples.json")
 
 
 def main():
@@ -196,43 +141,25 @@ def main():
         default=1,
         help="样例递归深度，每基于target生成一次formula算一层",
     )
+    parser.add_argument("--hint", type=str, help="提示类型", default="direct neg")
     args = parser.parse_args()
-
     # print arguments
     print(f"Generating {args.n} samples into {args.name}.json with depth {args.depth}")
 
-    samples = []
+    trees = []
     for i in range(args.n):
-        sample = None
+        tree = None
         for _ in range(args.depth):
-            sample = generate_sample(sample)
-            sample["id"] = i
-        samples.append(sample)
-    # 将生成hints的部分在递归生成公式后进行
-    for i in range(len(samples)):
-        samples[i] = generate_data(samples[i])
-    # output to json file
+            tree = generate_tree(tree)
+            tree["id"] = i
+        trees.append(tree)
+    # 递归生成路径树
+    for i in range(len(trees)):
+        trees[i] = generate_data(trees[i], args.hint)
+
     with open(f"datasets/{args.name}.json", "w") as f:
-        json.dump(samples, f, indent=4, ensure_ascii=False)
+        json.dump(trees, f, indent=4, ensure_ascii=False)
     print(f"Generated {args.n} samples and saved to {args.name}.json")
-
-
-def main_all_base():
-    with open("datas/all_base_samples_levels.json", "r") as f:
-        samples = json.load(f)
-
-    for sample in samples:
-        events = sample["events"]
-        used_names = set(e for e in events if e != "")
-        for i in range(len(events)):
-            if events[i] == "":
-                events[i] = random_event_name(used_names)
-
-        sample["hints"] = generate_negative_hints(sample["formulas"], events)
-        sample["id"] = samples.index(sample)
-
-    with open("datasets/test_base.json", "w") as f:
-        json.dump(samples, f, indent=4, ensure_ascii=False)
 
 
 # def main_all_real():
@@ -268,9 +195,7 @@ def main_all_base():
 
 
 if __name__ == "__main__":
-    # # general sample
-    # main()
-    # # all base sample
-    main_all_base()
+    # general sample
+    main()
     # # all real base sample
     # main_all_real()

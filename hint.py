@@ -398,3 +398,86 @@ def ends(rel):
         }
     else:
         return None
+
+
+ATTRIBUTE_ORDER = ["start", "end", "overlap", "duration", "meet"]
+
+# Core attributes for each relation (minimal clues) based on hint.md
+RELATION_CORE_ATTRS = {
+    "p": ["start", "overlap", "meet"],
+    "P": ["start", "overlap", "meet"],
+    "m": ["start", "meet"],
+    "M": ["start", "meet"],
+    "o": ["start", "overlap"],
+    "O": ["start", "overlap"],
+    "f": ["start", "end"],
+    "F": ["start", "end"],
+    "s": ["start", "end"],
+    "S": ["start", "end"],
+    "d": ["start", "duration"],
+    "D": ["start", "duration"],
+    "e": ["duration"],
+}
+
+
+def _attribute_to_func(rel: str, attr: str):
+    if attr == "start":
+        start_val = RELATION_DEFINITIONS[rel]["start"]
+        if start_val == StartTime.BEFORE:
+            return happen_before
+        if start_val == StartTime.AFTER:
+            return happen_after
+        return starts
+    if attr == "end":
+        end_val = RELATION_DEFINITIONS[rel]["end"]
+        if end_val == EndTime.BEFORE:
+            return ends_before
+        if end_val == EndTime.AFTER:
+            return ends_after
+        return ends
+    if attr == "overlap":
+        overlap_val = RELATION_DEFINITIONS[rel]["overlap"]
+        return overlaps if overlap_val == Overlap.YES else no_overlap
+    if attr == "duration":
+        duration_val = RELATION_DEFINITIONS[rel]["duration"]
+        if duration_val == Duration.LONGER:
+            return longer_than
+        if duration_val == Duration.SHORTER:
+            return shorter_than
+        if duration_val == Duration.EQUAL:
+            return equals
+        return no_determine_length
+    if attr == "meet":
+        meet_val = RELATION_DEFINITIONS[rel]["meet"]
+        return only_follow if meet_val == Meet.YES else no_meeting
+    return None
+
+
+def get_core_attributes(rel: str):
+    return RELATION_CORE_ATTRS.get(rel, ATTRIBUTE_ORDER)
+
+
+def build_attribute_hint(rel: str, attr: str, events: list, l_no: int, r_no: int):
+    func = _attribute_to_func(rel, attr)
+    if func is None:
+        return None
+    info = func(rel)
+    if not info:
+        return None
+    return info["hint"].format(event_l=events[l_no], event_r=events[r_no])
+
+
+def pick_discriminating_attributes(target_rel: str, excluded_rel: str):
+    """Pick minimal attributes that differ between target and excluded relations."""
+    target_def = RELATION_DEFINITIONS[target_rel]
+    excluded_def = RELATION_DEFINITIONS[excluded_rel]
+
+    core_attrs = get_core_attributes(excluded_rel)
+    diffs = [attr for attr in core_attrs if target_def[attr] != excluded_def[attr]]
+    if diffs:
+        return diffs[:1]
+
+    fallback_diffs = [
+        attr for attr in ATTRIBUTE_ORDER if target_def[attr] != excluded_def[attr]
+    ]
+    return fallback_diffs[:1]
