@@ -8,6 +8,7 @@ load_dotenv()
 
 zhipu_apikey = os.getenv("ZHIPU_API_KEY")
 pony_apikey = os.getenv("PONY_API_KEY")
+deepseek_apikey = os.getenv("DEEPSEEK_API_KEY")
 
 
 def call_zhipu_api(query: str) -> str:
@@ -32,13 +33,35 @@ def call_zhipu_api(query: str) -> str:
         raise Exception(f"API调用失败: {response.status_code}, {response.text}")
 
 
+def call_api(messages, call_model) -> str:
+    return call_deepseek_api(messages, call_model)
+
+
+def call_deepseek_api(messages, call_model) -> str:
+    client = OpenAI(api_key=deepseek_apikey, base_url="https://api.deepseek.com")
+
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=messages,
+            temperature=0,
+            max_tokens=40000,
+            timeout=300,  # 5分钟超时
+            stream=False,
+        )
+    except Exception as e:
+        raise Exception(f"API调用失败: {str(e)}")
+
+    return response.choices[0].message.content
+
+
 def call_pony_api(messages, call_model) -> str:
     client = OpenAI(
         base_url="https://api.tokenpony.cn/v1", api_key=pony_apikey  # 替换为您的API Key
     )
     try:
         response = client.chat.completions.create(
-            # model="glm-4.6",  
+            # model="glm-4.6",
             # model="qwen3-next-80b-a3b-instruct",
             # model="deepseek-v3.2",
             # model="qwen3-32b",
@@ -86,7 +109,7 @@ def main():
                 {"role": "user", "content": message},
             ]
             print("== Hint ", i + 1, "==")
-            result = call_pony_api(messages)
+            result = call_api(messages)
             print(result)
             sleep(1)
         # for i in range(len(hints)):
