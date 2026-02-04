@@ -13,6 +13,7 @@ allenEnv/
 # IDEs
 .idea
 .vscode/
+.github/
 
 # dataset
 datasets/
