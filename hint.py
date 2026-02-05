@@ -271,7 +271,7 @@ def overlaps(rel):
         choice = [
             "Events '{event_l}' and '{event_r}' overlap in time",
             "There is a temporal overlap between events '{event_l}' and '{event_r}'",
-            "At one point, both '{event_l}' and '{event_r}' were active.",
+            "During a period of time, both '{event_l}' and '{event_r}' were active.",
         ]
         return {
             "hint": random.choice(choice),
