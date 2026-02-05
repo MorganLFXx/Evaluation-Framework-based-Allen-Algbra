@@ -298,9 +298,9 @@ def only_follow(rel):
 def start_before(rel):
     if rel in ["p", "m", "o", "F", "D"]:
         choice = [
-            "'{event_l}' starts  '{event_r}'",
+            "'{event_l}' starts before'{event_r}'",
             "'{event_l}' triggers earlier than '{event_r}'",
-            "'{event_l}' occurs earlier than '{event_r}'",
+            "'{event_l}' occurs earlier than '{event_r}'(Only related to the start time.)",
         ]
         return {
             "hint": random.choice(choice),
@@ -315,7 +315,7 @@ def start_after(rel):
         choice = [
             "'{event_l}' starts after '{event_r}'",
             "'{event_l}' triggers later than '{event_r}'",
-            "'{event_l}' occurs after '{event_r}'",
+            "'{event_l}' occurs after '{event_r}'(Only related to the start time)",
         ]
         return {
             "hint": random.choice(choice),
