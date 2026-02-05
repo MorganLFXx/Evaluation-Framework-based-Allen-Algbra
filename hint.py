@@ -295,11 +295,11 @@ def only_follow(rel):
         return None
 
 
-def happen_before(rel):
+def start_before(rel):
     if rel in ["p", "m", "o", "F", "D"]:
         choice = [
-            "'{event_l}' happens before '{event_r}'",
-            "'{event_l}' takes place prior to '{event_r}'",
+            "'{event_l}' starts  '{event_r}'",
+            "'{event_l}' triggers earlier than '{event_r}'",
             "'{event_l}' occurs earlier than '{event_r}'",
         ]
         return {
@@ -310,12 +310,12 @@ def happen_before(rel):
         return None
 
 
-def happen_after(rel):
+def start_after(rel):
     if rel in ["P", "M", "O", "f", "d"]:
         choice = [
-            "'{event_l}' happens after '{event_r}'",
-            "'{event_l}' takes place later than '{event_r}'",
-            "'{event_l}' occurs subsequent to '{event_r}'",
+            "'{event_l}' starts after '{event_r}'",
+            "'{event_l}' triggers later than '{event_r}'",
+            "'{event_l}' occurs after '{event_r}'",
         ]
         return {
             "hint": random.choice(choice),
@@ -424,9 +424,9 @@ def _attribute_to_func(rel: str, attr: str):
     if attr == "start":
         start_val = RELATION_DEFINITIONS[rel]["start"]
         if start_val == StartTime.BEFORE:
-            return happen_before
+            return start_before
         if start_val == StartTime.AFTER:
-            return happen_after
+            return start_after
         return starts
     if attr == "end":
         end_val = RELATION_DEFINITIONS[rel]["end"]
