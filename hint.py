@@ -130,7 +130,6 @@ HINT_TEMPLATES = {
     "p": [
         "'{event_l}' ends before '{event_r}' starts.",
         "Some time after '{event_l}' ended, '{event_r}' occurred.",
-        "After '{event_l}' had been underway for some time, Tom finally made up his mind to initiate '{event_r}'.",
         "'{event_l}' concluded ahead of '{event_r}' kicking off.",
         "There was a gap between the finish of '{event_l}' and the start of '{event_r}'.",
     ],
@@ -152,39 +151,39 @@ HINT_TEMPLATES = {
     ],
     "o": [
         "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' starts but before '{event_r}' ends.",
-        "'{event_l}' and '{event_r}' overlap in time. But '{event_l}' starts first.",
+        "'{event_l}' and '{event_r}' overlap in time. But '{event_l}' starts first. And we can't tell which one lasts longer.",
     ],
     "O": [
         "'{event_l}' starts after '{event_r}' starts but before it ends and ends after '{event_r}' ends.",
-        "'{event_l}' and '{event_r}' overlap in time. But '{event_r}' starts first.",
+        "'{event_l}' and '{event_r}' overlap in time. But '{event_r}' starts first. And we can't tell which one lasts longer.",
     ],
     "F": [
         "'{event_l}' ends exactly when '{event_r}' ends, but starts before '{event_r}' starts.",
         "'{event_r}' finishes at the same time as '{event_l}' but began earlier.",
     ],
     "f": [
-        "'{event_l}' starts after '{event_r}' starts and ends exactly when '{event_r}' ends."
+        "'{event_l}' starts after '{event_r}' starts and ends exactly when '{event_r}' ends.",
         "'{event_l}' finishes at the same time as '{event_r}' but began earlier.",
     ],
     "D": [
-        "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' ends."
-        "During '{event_l}', '{event_r}' started and ended."
+        "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' ends.",
+        "During '{event_l}', '{event_r}' started and ended.",
     ],
     "d": [
-        "'{event_l}' starts after '{event_r}' starts and ends before '{event_r}' ends."
-        "The duration of '{event_l}' is part of the duration of '{event_r}'."
+        "'{event_l}' starts after '{event_r}' starts and ends before '{event_r}' ends.",
+        "The duration of '{event_l}' is part of the duration of '{event_r}'.",
     ],
     "s": [
-        "'{event_l}' starts exactly when '{event_r}' starts and ends before '{event_r}' ends."
-        "'{event_l}' starts at the same time as '{event_r}' but ends later."
+        "'{event_l}' starts exactly when '{event_r}' starts and ends before '{event_r}' ends.",
+        "'{event_l}' starts at the same time as '{event_r}' but ends later.",
     ],
     "S": [
-        "'{event_l}' starts exactly when '{event_r}' starts and ends after '{event_r}' ends."
-        "'{event_l}' starts at the same time as '{event_r}' but ends earlier."
+        "'{event_l}' starts exactly when '{event_r}' starts and ends after '{event_r}' ends.",
+        "'{event_l}' starts at the same time as '{event_r}' but ends earlier.",
     ],
     "e": [
-        "'{event_l}' starts exactly when '{event_r}' starts and ends exactly when '{event_r}' ends."
-        "'{event_l}' and '{event_r}' overlap completely in time."
+        "'{event_l}' starts exactly when '{event_r}' starts and ends exactly when '{event_r}' ends.",
+        "'{event_l}' and '{event_r}' overlap completely in time.",
     ],
 }
 
@@ -243,7 +242,7 @@ def shorter_than(rel):
 def no_meeting(rel):
     if rel in ["p", "P"]:
         choice = [
-            "There is no point in time when both events '{event_l}' and '{event_r}' are occurring",
+            "There exists no temporal point of coincidence between '{event_l}' and '{event_r}' whatsoever.",
             "Events '{event_l}' and '{event_r}' do not meet at any time",
             "At no time do events '{event_l}' and '{event_r}' coincide",
         ]
@@ -305,7 +304,7 @@ def start_before(rel):
         choice = [
             "'{event_l}' starts before'{event_r}'",
             "'{event_l}' triggers earlier than '{event_r}'",
-            "'{event_l}' occurs earlier than '{event_r}'(Only related to the start time.)",
+            "'{event_l}' occurs earlier than '{event_r}'(Only related to the start time. Not the whole event).",
         ]
         return {
             "hint": random.choice(choice),
@@ -320,7 +319,7 @@ def start_after(rel):
         choice = [
             "'{event_l}' starts after '{event_r}'",
             "'{event_l}' triggers later than '{event_r}'",
-            "'{event_l}' occurs after '{event_r}'(Only related to the start time)",
+            "'{event_l}' occurs later than '{event_r}'(Only related to the start time. Not the whole event).",
         ]
         return {
             "hint": random.choice(choice),
@@ -349,7 +348,7 @@ def ends_after(rel):
     if rel in ["P", "M", "O", "S", "D"]:
         choices = [
             "'{event_l}' ends after '{event_r}' ends.",
-            "'{event_l}' concludes subsequent to the conclusion of '{event_r}'.",
+            "'{event_l}' concludes after the conclusion of '{event_r}'.",
             "'{event_l}' finishes later than '{event_r}'.",
         ]
         return {
