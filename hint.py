@@ -156,7 +156,7 @@ HINT_TEMPLATES = {
     ],
     "F": [
         "'{event_l}' ends exactly when '{event_r}' ends, but starts before '{event_r}' starts.",
-        "'{event_l}' finishes at the same time as '{event_l}' but began earlier.",
+        "'{event_r}' finishes at the same time as '{event_l}' but began earlier.",
     ],
     "f": [
         "'{event_l}' starts after '{event_r}' starts and ends exactly when '{event_r}' ends."
