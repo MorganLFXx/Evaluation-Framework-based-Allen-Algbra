@@ -141,10 +141,14 @@ HINT_TEMPLATES = {
     "m": [
         "'{event_l}' ends exactly when '{event_r}' starts.",
         "'{event_r}' began the moment '{event_l}' wrapped up.",
+        "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point",
+        "There is no time interval between the termination of '{event_l}' and the initiation of '{event_r}'",
     ],
     "M": [
         "'{event_l}' starts exactly when '{event_r}' ends.",
         "'{event_l}' commenced right as '{event_r}' wrapped up.",
+        "'{event_r}' and '{event_l}' are seamlessly connected at this temporal point",
+        "There is no time interval between the termination of '{event_r}' and the initiation of '{event_l}'",
     ],
     "o": [
         "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' starts but before '{event_r}' ends.",
@@ -284,8 +288,9 @@ def overlaps(rel):
 def only_follow(rel):
     if rel in ["m", "M"]:
         choice = [
-            "Although '{event_l}' and '{event_r}' are not overlapping, they are sequential.",
+            "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point",
             "'{event_l}' and '{event_r}' are like day and night: connected but not overlapping.",
+            "There is no time interval between the termination of '{event_l}' and the initiation of '{event_r}'",
         ]
         return {
             "hint": random.choice(choice),
