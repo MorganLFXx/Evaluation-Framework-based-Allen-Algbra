@@ -408,14 +408,14 @@ RELATION_CORE_ATTRS = {
     "P": ["start", "overlap", "meet"],
     "m": ["start", "meet"],
     "M": ["start", "meet"],
-    "o": ["start", "overlap"],
-    "O": ["start", "overlap"],
+    "o": ["start", "overlap", "duration"],
+    "O": ["start", "overlap", "duration"],
     "f": ["start", "end"],
     "F": ["start", "end"],
     "s": ["start", "end"],
     "S": ["start", "end"],
-    "d": ["start", "duration"],
-    "D": ["start", "duration"],
+    "d": ["start", "end", "duration"],
+    "D": ["start", "end", "duration"],
     "e": ["duration"],
 }
 
