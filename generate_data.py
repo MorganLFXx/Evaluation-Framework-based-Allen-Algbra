@@ -8,17 +8,35 @@ from generate_hints import generate_hints
 
 def random_event_name(used_names=None):
     # year events
+    # events_list = [
+    #     "regional war",
+    #     "siege",
+    #     "government revolution",
+    #     "engineering project",
+    #     "invention process",
+    #     "construction",
+    #     "book writing",
+    #     "tour to study",
+    #     "long-term travel",
+    #     "long-distance migration",
+    # ]
     events_list = [
-        "regional war",
-        "siege",
-        "government revolution",
-        "engineering project",
-        "invention process",
-        "construction",
-        "book writing",
-        "tour to study",
-        "long-term travel",
-        "long-distance migration",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
     ]
     if used_names is not None:
         available = [e for e in events_list if e not in used_names]
@@ -162,6 +180,20 @@ def main():
     print(f"Generated {args.n} samples and saved to {args.name}.json")
 
 
+def main_base():
+    with open("datas/all_base_samples.json", "r") as f:
+        samples = json.load(f)
+    for sample in samples:
+        events = sample["events"]
+        used_names = set(e for e in events if e != "")
+        for i in range(len(events)):
+            if events[i] == "":
+                events[i] = random_event_name(used_names)
+        sample = generate_data(sample, hint_type="direct neg")
+    with open("datasets/test_base_neg.json", "w") as f:
+        json.dump(samples, f, indent=4, ensure_ascii=False)
+
+
 # def main_all_real():
 # with open("datas/all_base_samples.json", "r") as f:
 #     samples = json.load(f)
@@ -199,3 +231,5 @@ if __name__ == "__main__":
     main()
     # # all real base sample
     # main_all_real()
+    # # all base samples
+    # main_base()

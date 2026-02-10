@@ -143,7 +143,19 @@ def generate_hints(paths, events, hint_type="direct neg"):
 
 
 def main():
-    pass
+    path = {
+        "target": "s",
+        "path": ["s", "D"],
+        "excluded": ["d", "D"],
+        "parent": -1,
+        "left": 2,
+        "right": 1,
+        "base_event": [0, 1],
+        "new_event": 2,
+    }
+
+    hints = generate_hint(path, ["A", "B", "C", "D"], "indirect pos")
+    print(hints)
 
 
 if __name__ == "__main__":
