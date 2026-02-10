@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import glob
-from utils.chat import call_pony_api
+from utils.chat import call_api
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
@@ -13,7 +13,7 @@ precedes(p), preceded_by(P), meets(m), met_by(M), overlaps(o), overlapped_by(O),
 Here are some things to note: 
 1. 'A overlaps B' means that there is overlap between A and B but A starts before B. 'A overlapped_by B' means A and B still overlap, but B starts before A. 
 2. 'A starts B' means A and B start at the same time but A ends before B. 'A started_by B' means A and B start at the same time but B ends before A.
-3. 'finishes' means A and B end at the same time but A starts after B. 'finished_by' means A and B end at the same time but B starts after A.
+3. 'A finishes B' means A and B end at the same time but A starts after B. 'A finished_by B' means A and B end at the same time but B starts after A.
 The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
 """
 # TIME_GRANULARITY = "The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts."
@@ -40,7 +40,14 @@ So the only possible relationship left is '0 precedes 1 (p)'.
 
 post_question = """I will provide all hints step by step. 
 For each hint, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
+You should only answer directly the abbreviations of final answer after all hints have been provided.
 Remember no need to provide me with the thought process. Just provide your thoughtfully considered answer.
+If there are more than six possibilities, you only need to answer 'I can not determine'.
+"""
+
+detail_post_question = """I will provide all hints step by step. 
+For each hint, you must guess all possible relationships answer and give your reasoning. 
+You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning, before finally answering with the abbreviations of final answer after all hints have been provided.
 If there are more than six possibilities, you only need to answer 'I can not determine'.
 """
 
@@ -63,7 +70,7 @@ def multi_chat(sample, model):
             messages.append({"role": "user", "content": question + hints[i]})
         else:
             messages.append({"role": "user", "content": hints[i]})
-        result = call_pony_api(messages, model)
+        result = call_api(messages, model)
         # print(result)
         messages.append({"role": "assistant", "content": result})
         answers.append(result)
@@ -80,15 +87,17 @@ def single_chat(sample, model):
         "Please help me determine the allen relationship between "
         f"'{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following hints steps by steps."
     )
-    question += post_question + "\n"
+    # question += post_question + "\n"
+    question += detail_post_question + "\n"
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
     messages = [
-        {"role": "system", "content": allen_helper + few_shot_examples},
+        # {"role": "system", "content": allen_helper + few_shot_examples},
+        {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
     ]
     try:
-        result = call_pony_api(messages, model)
+        result = call_api(messages, model)
     except Exception as e:
         result = "API调用失败"
     # print(result)
@@ -236,7 +245,7 @@ def main():
         print(f"已存在答案的样本数: {len(processed_indices)} / {len(samples)}")
 
     if args.merge_only:
-        final_path = f"datasets/{args.name}_with_answers.json"
+        final_path = f"datasets/answers/{args.name}_with_answers.json"
         with open(final_path, "w", encoding="utf-8") as f:
             json.dump(samples, f, indent=4, ensure_ascii=False)
         print(f"已完成整合并保存到 {final_path}")
@@ -303,7 +312,7 @@ def main():
             future.result()
 
     # 答案整合：所有线程都处理完后，输出最终答案文件
-    final_path = f"datasets/{args.name}_with_answers.json"
+    final_path = f"datasets/answers/{args.name}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
 
