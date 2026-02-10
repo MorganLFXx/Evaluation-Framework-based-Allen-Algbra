@@ -140,13 +140,11 @@ HINT_TEMPLATES = {
     "m": [
         "'{event_l}' ends exactly when '{event_r}' starts.",
         "'{event_r}' began the moment '{event_l}' wrapped up.",
-        "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point",
         "There is no time interval between the termination of '{event_l}' and the initiation of '{event_r}'",
     ],
     "M": [
         "'{event_l}' starts exactly when '{event_r}' ends.",
         "'{event_l}' commenced right as '{event_r}' wrapped up.",
-        "'{event_r}' and '{event_l}' are seamlessly connected at this temporal point",
         "There is no time interval between the termination of '{event_r}' and the initiation of '{event_l}'",
     ],
     "o": [
@@ -159,11 +157,11 @@ HINT_TEMPLATES = {
     ],
     "F": [
         "'{event_l}' ends exactly when '{event_r}' ends, but starts before '{event_r}' starts.",
-        "'{event_r}' finishes at the same time as '{event_l}' but began earlier.",
+        "'{event_l}' finishes at the same time as '{event_r}' but began earlier.",
     ],
     "f": [
         "'{event_l}' starts after '{event_r}' starts and ends exactly when '{event_r}' ends.",
-        "'{event_l}' finishes at the same time as '{event_r}' but began earlier.",
+        "'{event_r}' finishes at the same time as '{event_l}' but began earlier.",
     ],
     "D": [
         "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' ends.",
@@ -171,15 +169,15 @@ HINT_TEMPLATES = {
     ],
     "d": [
         "'{event_l}' starts after '{event_r}' starts and ends before '{event_r}' ends.",
-        "The duration of '{event_l}' is part of the duration of '{event_r}'.",
+        "The duration of '{event_l}' is part of the duration of '{event_r}' and their start time and end time are different.",
     ],
     "s": [
         "'{event_l}' starts exactly when '{event_r}' starts and ends before '{event_r}' ends.",
-        "'{event_l}' starts at the same time as '{event_r}' but ends later.",
+        "'{event_l}' starts at the same time as '{event_r}' but ends earlier.",
     ],
     "S": [
         "'{event_l}' starts exactly when '{event_r}' starts and ends after '{event_r}' ends.",
-        "'{event_l}' starts at the same time as '{event_r}' but ends earlier.",
+        "'{event_l}' starts at the same time as '{event_r}' but ends later.",
     ],
     "e": [
         "'{event_l}' starts exactly when '{event_r}' starts and ends exactly when '{event_r}' ends.",
@@ -199,7 +197,7 @@ def no_determine_length(rel):
         choice = [
             "Cannot determine which event '{event_l}' or '{event_r}' lasts longer",
             "It is unclear which event '{event_l}' or '{event_r}' has a longer duration",
-            "The lengths of events '{event_l}' and '{event_r}' cannot be compared definitively",
+            "The lengths of events '{event_l}' and '{event_r}' cannot be compared",
         ]
         return {
             "hint": random.choice(choice),
@@ -289,7 +287,6 @@ def only_follow(rel):
         choice = [
             "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point",
             "'{event_l}' and '{event_r}' are like day and night: connected but not overlapping.",
-            "There is no time interval between the termination of '{event_l}' and the initiation of '{event_r}'",
         ]
         return {
             "hint": random.choice(choice),
@@ -303,7 +300,7 @@ def start_before(rel):
     if rel in ["p", "m", "o", "F", "D"]:
         choice = [
             "'{event_l}' starts before'{event_r}'",
-            "'{event_l}' triggers earlier than '{event_r}'",
+            "'{event_l}' triggers earlier than '{event_r}'(Only related to the start time. Not the whole event)",
             "'{event_l}' occurs earlier than '{event_r}'(Only related to the start time. Not the whole event).",
         ]
         return {
@@ -318,7 +315,7 @@ def start_after(rel):
     if rel in ["P", "M", "O", "f", "d"]:
         choice = [
             "'{event_l}' starts after '{event_r}'",
-            "'{event_l}' triggers later than '{event_r}'",
+            "'{event_l}' triggers later than '{event_r}'(Only related to the start time. Not the whole event)",
             "'{event_l}' occurs later than '{event_r}'(Only related to the start time. Not the whole event).",
         ]
         return {
