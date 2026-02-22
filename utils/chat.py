@@ -95,10 +95,14 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus-2026-02-15") -> str:
     except Exception as e:
         print(f"API调用失败: {str(e)}")
         raise Exception(f"API调用失败: {str(e)}")
-    return response.choices[0].message.content
+    return response.choices[0].message
 
 
 def call_api(messages, call_model) -> str:
+    return call_tongyi_api(messages, call_model).content
+
+
+def call_thinking_api(messages, call_model) -> dict:
     return call_tongyi_api(messages, call_model)
 
 
@@ -108,8 +112,7 @@ def main():
         message = [
             {"role": "user", "content": "请给我介绍你的身份，你有什么能力？"},
         ]
-        result = call_api(message, "qwen3.5-plus")
-        print(result)
+        result = call_api(message, "qwen3.5-plus-2026-02-15")
     except Exception as e:
         print(str(e))
 
