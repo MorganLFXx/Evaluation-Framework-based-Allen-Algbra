@@ -285,8 +285,9 @@ def overlaps(rel):
 def only_follow(rel):
     if rel in ["m", "M"]:
         choice = [
-            "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point",
-            "'{event_l}' and '{event_r}' are like day and night: connected but not overlapping.",
+            "'{event_l}' and '{event_r}' are seamlessly connected at this temporal point(And we don't know which one starts first).",
+            "'{event_l}' and '{event_r}' seamlessly transition at a single point in time(And we don't know which one starts first).",
+            "'{event_l}' and '{event_r}' are like day and night: connected but not overlapping.(We don't know which one starts first.)",
         ]
         return {
             "hint": random.choice(choice),
