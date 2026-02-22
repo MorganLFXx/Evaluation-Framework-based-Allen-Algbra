@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import glob
-from utils.chat import call_api
+from utils.chat import call_api, call_thinking_api
 from utils.format import parse_json_block
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -107,7 +107,7 @@ def single_chat(sample, model, hint_type):
         {"role": "user", "content": question},
     ]
     try:
-        result = call_api(messages, model)
+        result = call_thinking_api(messages, model)
     except Exception as e:
         result = f"API调用失败{str(e)}"
     # print(result)
@@ -302,15 +302,14 @@ def main():
                     index, samples[index], args.chat_type, args.model, args.hint
                 )
                 with progress_lock:
-                    print(answers)
-                    if "thinking" in answers[0]:
-                        answers[0] = parse_json_block(answers[0])
-                        samples[index][answer_key] = [
-                            answers[0].get("answer_single", "")
-                        ]
-                        samples[index]["thinking"] = answers[0].get("thinking", "")
+                    answer = answers[0].content
+                    if "thinking" in answer:
+                        answer = parse_json_block(answer)
+                        samples[index][answer_key] = [answer.get("answer_single", "")]
+                        samples[index]["thinking"] = answer.get("thinking", "")
                     else:
-                        samples[index][answer_key] = answers
+                        samples[index][answer_key] = [answer]
+                    samples[index]["reasoning_content"] = answers[0].reasoning_content
                     processed_indices.add(index)
 
                 thread_results.append({"index": index, "sample": samples[index]})
