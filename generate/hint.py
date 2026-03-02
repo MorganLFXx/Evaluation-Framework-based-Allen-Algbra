@@ -157,11 +157,11 @@ HINT_TEMPLATES = {
     ],
     "F": [
         "'{event_l}' ends exactly when '{event_r}' ends, but starts before '{event_r}' starts.",
-        "'{event_l}' finishes at the same time as '{event_r}' but began earlier.",
+        "'{event_l}' finishes at the same time as '{event_r}' and began earlier.",
     ],
     "f": [
         "'{event_l}' starts after '{event_r}' starts and ends exactly when '{event_r}' ends.",
-        "'{event_r}' finishes at the same time as '{event_l}' but began earlier.",
+        "'{event_r}' finishes at the same time as '{event_l}' and began earlier.",
     ],
     "D": [
         "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' ends.",
@@ -185,6 +185,22 @@ HINT_TEMPLATES = {
     ],
 }
 
+EXPLANATION_TEMPLATES = {
+    "p": "'{event_l}' precedes '{event_r}'",
+    "P": "'{event_r}' precedes '{event_l}'",
+    "o": "'{event_l}' overlaps '{event_r}'",
+    "O": "'{event_r}' overlaps '{event_l}'",
+    "m": "'{event_l}' meets '{event_r}'",
+    "M": "'{event_r}' meets '{event_l}'",
+    "s": "'{event_l}' starts '{event_r}'",
+    "S": "'{event_l}' is started by '{event_r}'",
+    "d": "'{event_l}' during '{event_r}'",
+    "D": "'{event_l}' contains '{event_r}'",
+    "f": "'{event_l}' finishes '{event_r}'",
+    "F": "'{event_l}' is finished by '{event_r}'",
+    "e": "'{event_l}' equals '{event_r}'",
+}
+
 """
 oFD, osd, DSO, dfO, pmo, OMP, Fef, seS
 pmoFD, pmosd, DSOMP, dfOMP
@@ -195,13 +211,14 @@ full, concur
 def no_determine_length(rel):
     if rel not in ["F", "f", "D", "d", "s", "S", "e"]:
         choice = [
-            "Cannot determine which event '{event_l}' or '{event_r}' lasts longer",
-            "It is unclear which event '{event_l}' or '{event_r}' has a longer duration",
-            "The lengths of events '{event_l}' and '{event_r}' cannot be compared",
+            # "Cannot determine which event '{event_l}' or '{event_r}' lasts longer",
+            # "It is unclear which event '{event_l}' or '{event_r}' has a longer duration",
+            # "The lengths of events '{event_l}' and '{event_r}' cannot be compared",
+            "The Allen relation between '{event_l}' and '{event_r}' specifies temporal ordering, not relative duration.",
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "fFdDsSe",
+            "explanation": "The relative length of '{event_l}' and '{event_r}' cannot be determined. So the Allen relation between events '{event_l}' and '{event_r}' is a relation independent of their relative lengths. Exclude relationships that can determine relative length. For example: f,F,s,S,e,d,D",
         }
     else:
         return None
@@ -216,7 +233,7 @@ def longer_than(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmMoOdfse",
+            "explanation": "'{event_l}' has a longer duration compared to '{event_r}'. So '{event_r}' must be part of '{event_l}'. Only relations that indicate one event is part of another are F, D, S.",
         }
     else:
         return None
@@ -231,7 +248,7 @@ def shorter_than(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmMoOFSDe",
+            "explanation": "'{event_l}' has a shorter duration compared to '{event_r}'. So '{event_l}' must be part of '{event_r}'. Only relations that indicate one event is part of another are f, d, s.",
         }
     else:
         return None
@@ -246,7 +263,7 @@ def no_meeting(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "oOdDsSfFe",
+            "explanation": "There is no temporal point of coincidence between '{event_l}' and '{event_r}'. So '{event_l}' and '{event_r}' do not meet at any time which excludes relationship m,M.",
         }
     else:
         return None
@@ -261,7 +278,7 @@ def no_overlap(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "oOdDsSfFe",
+            "explanation": "There is no temporal overlap between '{event_l}' and '{event_r}'. So '{event_l}' and '{event_r}' do not overlap in time which excludes relationships o,O,f,F,d,D,s,S,e and so on.",
         }
     else:
         return None
@@ -276,7 +293,7 @@ def overlaps(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmM",
+            "explanation": "We can know '{event_l}' and '{event_r}' overlap in time which excludes relationships p,P,m,M.",
         }
     else:
         return None
@@ -291,7 +308,7 @@ def only_follow(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPoOdDsSfFe",
+            "explanation": "We can observe that '{event_l}' and '{event_r}' are seamlessly connected which indicates that they are related by the 'meet' relationship (m or M).",
         }
     else:
         return None
@@ -306,7 +323,7 @@ def start_before(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "PMOdsSfe",
+            "explanation": "We can know the start time of '{event_l}' is before the start time of '{event_r}'.",
         }
     else:
         return None
@@ -321,7 +338,7 @@ def start_after(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pmoDsSFe",
+            "explanation": "We can know the start time of '{event_l}' is after the start time of '{event_r}'.",
         }
     else:
         return None
@@ -336,7 +353,7 @@ def ends_before(rel):
         ]
         return {
             "hint": random.choice(choices),
-            "update_cur": "PMODSfFe",
+            "explanation": "We can know the end time of '{event_l}' is before the end time of '{event_r}'.",
         }
     else:
         return None
@@ -351,7 +368,7 @@ def ends_after(rel):
         ]
         return {
             "hint": random.choice(choices),
-            "update_cur": "pmodsfFe",
+            "explanation": "We can know the end time of '{event_l}' is after the end time of '{event_r}'.",
         }
     else:
         return None
@@ -366,7 +383,7 @@ def equals(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmMoOdDsSfF",
+            "explanation": "It is clear that '{event_l}' equals '{event_r}'.",
         }
     else:
         return None
@@ -381,7 +398,7 @@ def starts(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmMoOdDfF",
+            "explanation": "We can know '{event_l}' starts at the same time as '{event_r}'.",
         }
     else:
         return None
@@ -396,7 +413,7 @@ def ends(rel):
         ]
         return {
             "hint": random.choice(choice),
-            "update_cur": "pPmMoOdDsS",
+            "explanation": "We can know '{event_l}' ends at the same time as '{event_r}'.",
         }
     else:
         return None
@@ -466,7 +483,12 @@ def build_attribute_hint(rel: str, attr: str, events: list, l_no: int, r_no: int
     info = func(rel)
     if not info:
         return None
-    return info["hint"].format(event_l=events[l_no], event_r=events[r_no])
+    return {
+        "hint": info["hint"].format(event_l=events[l_no], event_r=events[r_no]),
+        "explanation": info["explanation"].format(
+            event_l=events[l_no], event_r=events[r_no]
+        ),
+    }
 
 
 def pick_discriminating_attributes(target_rel: str, excluded_rel: str):

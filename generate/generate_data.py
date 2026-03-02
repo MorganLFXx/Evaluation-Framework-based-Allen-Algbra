@@ -159,7 +159,9 @@ def generate_data(sample, hint_type):
         if events[i] == "":
             events[i] = random_event_name(used_names)
 
-    sample["hints"] = generate_hints(sample["paths"], events, hint_type)
+    hints, explanations = generate_hints(sample["paths"], events, hint_type)
+    sample["hints"] = hints
+    sample["explanation"] = explanations
     return sample
 
 
@@ -309,10 +311,10 @@ def main_link_length():
 
 if __name__ == "__main__":
     # general sample
-    # main()
-    # # all real base sample
+    main()
+    # all real base sample
     # main_all_real()
-    # # all base samples
+    # all base samples
     # main_base()
     # link length samples
-    main_link_length()
+    # main_link_length()

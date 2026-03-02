@@ -4,14 +4,17 @@ from utils.relation import allen_relations
 
 
 def get_negation(rel: str, l_no: int, r_no: int, events: list) -> list:
-    hints = []
     event_l = events[l_no]
     event_r = events[r_no]
-
-    hints.append(
-        f"It is not true that '{event_l}' {allen_relations[rel]} '{event_r}' ."
+    explanation = hint.EXPLANATION_TEMPLATES[rel].format(
+        event_l=event_l, event_r=event_r
     )
-    return hints
+    return [
+        {
+            "hint": f"It is not true that '{event_l}' {allen_relations[rel]} '{event_r}' .",
+            "explanation": f"It is not true that {explanation}.",
+        }
+    ]
 
 
 def get_easy_hint(rel: str, l_no: int, r_no: int, events: list) -> list:
@@ -19,8 +22,11 @@ def get_easy_hint(rel: str, l_no: int, r_no: int, events: list) -> list:
     event_l = events[l_no]
     event_r = events[r_no]
     template = random.choice(HINT_TEMPLATES[rel])
-    hint = template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
-    return hint
+    hint_text = template.format(event_l=event_l, l_no=l_no, event_r=event_r, r_no=r_no)
+    explanation_text = hint.EXPLANATION_TEMPLATES[rel].format(
+        event_l=event_l, event_r=event_r
+    )
+    return {"hint": hint_text, "explanation": explanation_text}
 
 
 def generate_neg_hints(path, events):
@@ -50,10 +56,10 @@ def generate_indirect_neg_hints(path, events):
         for attr in attrs:
             if attr in seen_attrs:
                 continue
-            hint_text = hint.build_attribute_hint(target_rel, attr, events, l_no, r_no)
-            if hint_text:
+            hint_info = hint.build_attribute_hint(target_rel, attr, events, l_no, r_no)
+            if hint_info:
                 seen_attrs.add(attr)
-                hints.append(hint_text)
+                hints.append(hint_info)
     return hints
 
 
@@ -101,9 +107,9 @@ def generate_indirect_evidence(path, events):
 
     attrs = _select_attrs(target_rel, path.get("excluded", []))
     for attr in attrs:
-        hint_text = hint.build_attribute_hint(target_rel, attr, events, l_no, r_no)
-        if hint_text:
-            hints.append(hint_text)
+        hint_info = hint.build_attribute_hint(target_rel, attr, events, l_no, r_no)
+        if hint_info:
+            hints.append(hint_info)
     return hints
 
 
@@ -139,7 +145,9 @@ def generate_hints(paths, events, hint_type="direct neg"):
     for p in paths:
         p_hints = generate_hint(p, events, hint_type)
         hints.extend(p_hints)
-    return hints
+    hint_texts = [h["hint"] for h in hints]
+    explanations = [h["explanation"] for h in hints]
+    return hint_texts, explanations
 
 
 def main():

@@ -21,6 +21,11 @@ base_sample = {
         "'M' starts after 'I' starts and ends before 'I' ends.The duration of 'M' is part of the duration of 'I'.",
         "'D' and 'I' share the same starting point.",
     ],
+    "explanation": [
+        "D precedes M",
+        "M during I",
+        "D and I start together",
+    ],
     "answer_single": ["s"],
 }
 # base_sample = {
