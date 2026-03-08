@@ -186,19 +186,19 @@ HINT_TEMPLATES = {
 }
 
 EXPLANATION_TEMPLATES = {
-    "p": "'{event_l}' precedes '{event_r}'",
-    "P": "'{event_r}' precedes '{event_l}'",
-    "o": "'{event_l}' overlaps '{event_r}'",
-    "O": "'{event_r}' overlaps '{event_l}'",
-    "m": "'{event_l}' meets '{event_r}'",
-    "M": "'{event_r}' meets '{event_l}'",
-    "s": "'{event_l}' starts '{event_r}'",
-    "S": "'{event_l}' is started by '{event_r}'",
-    "d": "'{event_l}' during '{event_r}'",
-    "D": "'{event_l}' contains '{event_r}'",
-    "f": "'{event_l}' finishes '{event_r}'",
-    "F": "'{event_l}' is finished by '{event_r}'",
-    "e": "'{event_l}' equals '{event_r}'",
+    "p": "'{event_l}' precedes '{event_r}' or Start('{event_l}') < End('{event_l}') < Start('{event_r}') < End('{event_r}').",
+    "P": "'{event_r}' precedes '{event_l}' or Start('{event_r}') < End('{event_r}') < Start('{event_l}') < End('{event_l}').",
+    "o": "'{event_l}' overlaps '{event_r}' or Start('{event_l}') < Start('{event_r}') < End('{event_l}') < End('{event_r}').",
+    "O": "'{event_r}' overlaps '{event_l}' or Start('{event_r}') < Start('{event_l}') < End('{event_r}') < End('{event_l}').",
+    "m": "'{event_l}' meets '{event_r}' or Start('{event_l}') < End('{event_l}') = Start('{event_r}') < End('{event_r}').",
+    "M": "'{event_r}' meets '{event_l}' or Start('{event_r}') < End('{event_r}') = Start('{event_l}') < End('{event_l}').",
+    "s": "'{event_l}' starts '{event_r}' or Start('{event_l}') = Start('{event_r}') < End('{event_l}') < End('{event_r}').",
+    "S": "'{event_l}' is started by '{event_r}' or Start('{event_l}') = Start(''{event_r}') < End('{event_r}') < End('{event_l}').",
+    "d": "'{event_l}' during '{event_r}' or Start('{event_r}') < Start(''{event_l}') < End('{event_l}') < End('{event_r}').",
+    "D": "'{event_l}' contains '{event_r}' or Start('{event_l}') < Start('{event_r}') < End('{event_r}') < End('{event_l}').",
+    "f": "'{event_l}' finishes '{event_r}' or Start('{event_r}') < Start('{event_l}') < End('{event_l}') = End('{event_r}').",
+    "F": "'{event_l}' is finished by '{event_r}' or Start('{event_l}') < Start('{event_r}') < End('{event_l}') = End('{event_r}').",
+    "e": "'{event_l}' equals '{event_r}' or Start('{event_l}') = Start('{event_r}') < End('{event_l}') = End('{event_r}').",
 }
 
 """
@@ -317,7 +317,7 @@ def only_follow(rel):
 def start_before(rel):
     if rel in ["p", "m", "o", "F", "D"]:
         choice = [
-            "'{event_l}' starts before'{event_r}'",
+            "'{event_l}' starts before '{event_r}'",
             "'{event_l}' triggers earlier than '{event_r}'(Only related to the start time. Not the whole event)",
             "'{event_l}' begins earlier than '{event_r}'(Only related to the start time. Not the whole event).",
         ]
