@@ -286,7 +286,9 @@ def link_count():
     error_map = {}
     new_test = []
     with open(
-        f"datasets/answers/test_link_len_with_answers.json", "r", encoding="utf-8"
+        f"datasets/answers/test_link_len_dsv32" + "_with_answers.json",
+        "r",
+        encoding="utf-8",
     ) as f:
         data = json.load(f)
     for item in data:

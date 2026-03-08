@@ -1,3 +1,7 @@
+"""
+检查模型生成的答案是否存在自然语言理解错误或推理错误，并给出相应的分析。
+"""
+
 import argparse
 import json
 import os
@@ -7,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils.chat import call_api
 from utils.format import parse_json_block
 from explain.qa_checker import sample_check
+from generate.generate_response import allen_helper
 
 
 def _read_json(path: str) -> List[Dict[str, Any]]:
@@ -25,9 +30,7 @@ def _atomic_dump_json(path: str, data) -> None:
     os.replace(tmp_path, path)
 
 
-def build_path_summaries(
-    paths: List[Dict[str, Any]], events: List[str]
-) -> List[Dict[str, Any]]:
+def build_path_summaries(paths: List[Dict[str, Any]], events: List[str]) -> List[str]:
     """Build bottom-up path tree lines for LLM checking."""
     if not paths:
         return []
@@ -50,7 +53,7 @@ def build_path_summaries(
         right_stmt = _rel_stmt(new_event, right_rel, base_r)
         excluded = path.get("excluded", [])
         excluded_text = ",".join(excluded) if excluded else ""
-        return f"{target_stmt} -> {left_stmt} + {right_stmt} + not({excluded_text})"
+        return f"{left_stmt} + {right_stmt} + not({excluded_text}) -> {target_stmt}"
 
     lines: List[str] = []
     visited = set()
@@ -76,7 +79,7 @@ def build_path_summaries(
     for root in roots:
         dfs(root)
 
-    return [{"target": lines[-1].split(" -> ")[0], "lines": lines}]
+    return lines
 
 
 def _call_llm_json(
@@ -93,18 +96,31 @@ def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
     explanations = sample.get("explanation", []) or []
     thinking = sample.get("thinking", "") or ""
 
-    system = (
-        "You are a verifier of natural language understanding. "
-        "Your task is to check if the model has made any natural language understanding errors."
-        "nlu error means The information extracted from a hint shows significant discrepancies with its intended explanation. "
-        "For example, it may exclude relationships that shouldn't be excluded, "
-        "retain relationships that shouldn't be retained, "
-        "or misinterpret the temporal sequence."
-    )
+    system = allen_helper
     user = (
-        "Check whether the model's thinking correctly interprets each hint. "
-        "Compare the model's interpretation for each hint against the provided explanation."
-        "Return JSON only. Schema: "
+        """
+        Your task is to check whether the model has made any Natural Language Understanding Errors (NLU Errors).
+        Definition of Natural Language Understanding Error:
+        A Natural Language Understanding Error occurs when the model incorrectly interprets the meaning of an individual hint.
+        Specifically, an NLU Error occurs if the temporal relation or temporal order extracted from a single hint does not match the gold explanation provided for that hint.
+        Examples of NLU Errors include:
+        - Misinterpreting the temporal relation described in the hint.
+        - Incorrect ordering start or end times for two events
+        - Incorrectly excluding a relation that should be retained.
+        - Incorrectly retaining a relation that should be excluded.
+        Important rules:
+        1. NLU errors are evaluated at the level of a single hint. Each hint should be checked independently.
+        2. Do NOT evaluate reasoning or multi-hint inference at this stage.
+        3. If a hint is correctly interpreted but later not used during reasoning, this is NOT an NLU error.
+        4. Missing information alone is not sufficient to conclude an NLU error unless the interpretation directly contradicts the gold explanation.
+        Procedure:
+        For each hint:
+        1. Compare the model's interpretation in the thinking process with the provided gold explanation.
+        2. Determine whether the extracted temporal relation or temporal information matches the explanation.
+        If any mismatch is found, classify the case as an NLU Error and stop the analysis.
+        Otherwise, conclude that no NLU Error is present. \n
+        """
+        + "Return JSON only. Schema: "
         '{"ok": bool, "error_type": string, "issues": [{"hint_index": int, "reason": string}], "confidence": number}. '
         "issues must include every hint whose interpretation conflicts with the explanation. "
         "If no issues, return an empty list and ok=true. "
@@ -140,7 +156,7 @@ def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
 
 
 def judge_thinking(
-    sample: Dict[str, Any], path_summaries: List[Dict[str, Any]], model: str
+    sample: Dict[str, Any], path_summaries: List[str], model: str
 ) -> Dict[str, Any]:
     # 1) Use thinking + bottom-up tree to validate reasoning.
     # 2) If uncertain, include reasoning_content and re-judge.
@@ -148,30 +164,57 @@ def judge_thinking(
     # reasoning_content = sample.get("reasoning_content", "") or ""
     hints = sample.get("hints", []) or []
     explanations = sample.get("explanation", []) or []
-    path_lines = path_summaries[0]["lines"] if path_summaries else []
+    path_lines = path_summaries if len(path_summaries) > 0 else []
 
-    system = (
-        "You are a verifier of temporal reasoning. "
-        "Your task is to check if the model has made any reasoning errors. "
-        "Reasoning errors refer to any mistakes made during the process of reasoning based on the information provided by hints."
-        "However, please note that if the information inferred from the hint is incorrect, "
-        "the resulting error will not be classified as a reasoning error, but rather as a natural language understanding error."
-        "Check the reasoning step-by-step bottom-up using the path tree."
-        "The path tree is displayed in top-down order. Follow the path tree step by step to check."
-    )
+    system = allen_helper
     user = (
+        """
+        Check whether the model has made any Reasoning Errors.
+        Assumption:
+        The interpretations of individual hints have already been checked and can be assumed to be correct unless clear evidence of misunderstanding appears.
+        Definition of Reasoning Error:
+        A Reasoning Error occurs when the model makes an incorrect inference while combining information from multiple hints to derive a conclusion.
+        Examples of Reasoning Errors include:
+        - Incorrectly combining temporal relations.
+        - Deriving a relation that contradicts the inference path.
+        - Improper use of hints during reasoning.   
+        - Hallucinations occurring during reasoning lead to alterations in certain information.
+        - Failing to derive a necessary intermediate relation or timeline.
+        Important rules:
+        1. Reasoning errors occur only at the multi-hint reasoning level.
+        2. If a hint is correctly interpreted but not used in the reasoning process when it should be used, this should be classified as a Reasoning Error.
+        3. If you find that a reasoning error actually originates from a misunderstanding of a single hint, then the error should be classified as an NLU Error.
+        4. The path tree and the order of hints may not match. You should determine the line being checked and the corresponding hints. 
+        Procedure:
+        1. Examine the reasoning steps in the thinking process following the path tree.
+        2. Identify the step where the reasoning becomes invalid.
+        If any incorrect inference step or missing reasoning step is detected, classify the case as a Reasoning Error.\n
+        """
         "Return JSON only. Schema: "
         '{"ok": bool, "error_type": string, "issues": ['
-        '{"step": string, "reason": string}], "uncertain": bool, "confidence": number}. '
-        "error_type must be one of: reasoning_error, none.\n"
+        '{"location": string, "reason": string}], "uncertain": bool, "confidence": number}. '
+        "'location' means the specific part of path tree or hints, for example, 'line 2 of path tree' or 'hint 1&2'. "
+        "error_type must be one of: reasoning_error, nlu_error(If you found NLU errors still exist), none.\n"
         "Hints and explanations:\n"
         + "\n".join(
             [
-                f"- Hint {i}: {h} | Explanation: {e}"
+                f"- Hint {i+1}: {h} | Explanation: {e}"
                 for i, (h, e) in enumerate(zip(hints, explanations))
             ]
         )
-        + "\nPath tree (bottom-up order):\n"
+        + "\nPath tree (bottom-up order, follow the path tree step by step to check):\n"
+        + "Note(How to use path tree):"
+        + """
+        The path tree is traversed in a bottom-up order, so the first line you see represent the more basic nodes in the tree 
+        Each node consists of two events and their Allen relation, representing the sequence of two start and two end time points.Therefore, the time sequence of detecting equivalence to relational structures is also correct.
+        For each line (i.e., bottom node + bottom node + exclude relationship-> up node), the following items need to be checked:
+        1. Do you already have information about the two lower-level nodes?
+        2. Do you already have the information needed to exclude relationships?
+        3. Whether to infer the relationship between upper-level nodes based on the information from points 1 and 2
+        If 1 is detected, if the underlying node can be further subdivided, it will backtrack; otherwise, it will check whether the corresponding hint is correctly understood.
+        If 2 is detected, confirm whether the corresponding exclusion relationship hint is understood
+        If 3 is detected, determine whether an error occurred during the inference process
+        """
         + "\n".join(path_lines)
         + "\nModel thinking:\n"
         + thinking
