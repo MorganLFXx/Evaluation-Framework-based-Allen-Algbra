@@ -16,27 +16,7 @@ Here are some things to note:
 2. 'A starts B' means A and B start at the same time but A ends before B. 'A started_by B' means A and B start at the same time but B ends before A.
 3. 'A finishes B' means A and B end at the same time but A starts after B. 'A finished_by B' means A and B end at the same time but B starts after A.
 The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
-"""
-# TIME_GRANULARITY = "The basic time granularity is day. For example, A(2020.2.1-2022.2.3) and B(2022.2.3-2024.4.5) have the relation 'meets' because A ends when B starts."
-
-few_shot_examples = """Here are an example:
-Target: 0 precedes 1
-Hints: 
-1.‘0’ and ‘2’ overlap in time. But ‘0’ starts first.
-2.‘2’ finishes at the same time as ‘1’ but began earlier.
-3.There is no overlap between ‘0’ and ‘1’
-4.There is no point in time when both events ‘0’ and ‘1’ are occurring
-
-Answer:
-Hint 1 means 0 overlaps 2.
-Hint 2 means 2 finished_by 1.
-So, by combining hint 1 and hint 2, we can deduce that the relationship between 0 and 1 can be described in the following ways:
-- 0 precedes 1 (p)
-- 0 meets 1 (m)
-- 0 finished_by 1 (o)
-Then, hint 3 states that there is no overlap between '0' and '1', which eliminates the possibilities of '0 overlaps 1 (o)'.
-Then, hint 4 states that there is no point in time when both events '0' and '1' are occurring, which eliminates the possibilities of '0 meets 1 (m)'.
-So the only possible relationship left is '0 precedes 1 (p)'.
+Note: Allen relation can be converted to timeline. Each one indicates unique sequence of start and end time points for two events.
 """
 
 post_question = """I will provide all hints step by step. 
@@ -47,13 +27,14 @@ If there are more than six possibilities, you only need to answer 'I can not det
 """
 
 detail_post_question = """I will provide all hints step by step. 
-For each hint, you must guess all possible relationships answer and give your reasoning. 
-You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning, before finally answering with the abbreviations of final answer after all hints have been provided.
+For each hint, you must provide your interpretation. You should only start reasoning after all prompts have been interpreted. 
+You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning(Please make sure you considering each one hint), 
+before finally answering with the abbreviations of final answer after all hints have been provided.
 If there are more than six possibilities, you only need to answer 'I can not determine'.
 Output ONLY JSON with fields: \n
 {
     "answer_single": "the abbreviation of the final answer",
-    "thinking": "your thoughtfully considered thinking process, explaining how each hint influences your reasoning"
+    "thinking": "your thoughtfully considered thinking process, explaining how each hint influences your reasoning(In the 'hint1: xxx, hint2: xxx, ...' format)"
 }
 """
 
@@ -68,7 +49,7 @@ def multi_chat(sample, model, hint_type):
     )
     hints = sample["hints"]
     messages = [
-        {"role": "system", "content": allen_helper + few_shot_examples},
+        {"role": "system", "content": allen_helper},
     ]
     question += post_question + "\n"
     for i in range(len(hints)):
