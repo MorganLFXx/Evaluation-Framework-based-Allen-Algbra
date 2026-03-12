@@ -1,6 +1,5 @@
 import random
 import copy
-import argparse
 import json
 from utils.relation import random_relation, get_composition
 from utils.db import get_event_by_rel
@@ -165,35 +164,26 @@ def generate_data(sample, hint_type):
     return sample
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run script with parameters")
-    parser.add_argument("--n", type=int, default=1, help="生成样例数量")
-    parser.add_argument("--name", type=str, required=True, help="生成的文件名")
-    parser.add_argument(
-        "--depth",
-        type=int,
-        default=1,
-        help="样例递归深度，每基于target生成一次formula算一层",
-    )
-    parser.add_argument("--hint", type=str, help="提示类型", default="direct neg")
-    args = parser.parse_args()
+def main(n, name, depth=1, hint="indirect pos"):
+    if not name:
+        raise ValueError("name is required")
     # print arguments
-    print(f"Generating {args.n} samples into {args.name}.json with depth {args.depth}")
+    print(f"Generating {n} samples into {name}.json with depth {depth}")
 
     trees = []
-    for i in range(args.n):
+    for i in range(n):
         # 递归生成路径树
         tree = None
-        for _ in range(args.depth):
+        for _ in range(depth):
             tree = generate_tree(tree)
             tree["id"] = i
         trees.append(tree)
     for i in range(len(trees)):
-        trees[i] = generate_data(trees[i], args.hint)
+        trees[i] = generate_data(trees[i], hint)
 
-    with open(f"datasets/{args.name}.json", "w") as f:
+    with open(f"datasets/{name}.json", "w") as f:
         json.dump(trees, f, indent=4, ensure_ascii=False)
-    print(f"Generated {args.n} samples and saved to {args.name}.json")
+    print(f"Generated {n} samples and saved to {name}.json")
 
 
 def main_base():
@@ -311,7 +301,7 @@ def main_link_length():
 
 if __name__ == "__main__":
     # general sample
-    main()
+    main(n=1, name="sample", depth=1, hint="direct neg")
     # all real base sample
     # main_all_real()
     # all base samples

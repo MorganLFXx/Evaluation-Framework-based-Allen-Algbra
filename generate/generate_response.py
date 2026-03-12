@@ -1,4 +1,3 @@
-import argparse
 import json
 import os
 import glob
@@ -188,50 +187,21 @@ def _recover_answers_from_temp(
     return restored
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Run script with parameters")
-    parser.add_argument("--name", type=str, help="需要生成答案的文件名")
-    parser.add_argument(
-        "--chat_type",
-        type=str,
-        choices=["single", "multi"],
-        required=True,
-        help="chat类型(single/multi)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="并行调用线程数",
-    )
-    parser.add_argument(
-        "--merge_only",
-        action="store_true",
-        help="只从temp恢复并整合输出，不再调用API",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        help="调用的模型名称",
-    )
-    parser.add_argument(
-        "--hint",
-        type=str,
-        choices=["hint", "story"],
-        help="基于hint/story生成问题",
-        default="hint",
-    )
-    args = parser.parse_args()
+def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
+    if not name:
+        raise ValueError("name is required")
+    if chat_type not in {"single", "multi"}:
+        raise ValueError("chat_type must be 'single' or 'multi'")
+    if hint not in {"hint", "story"}:
+        raise ValueError("hint must be 'hint' or 'story'")
 
-    samples = json.load(open(f"datasets/{args.name}.json", "r"))
-
-    answer_key = f"answer_{args.chat_type}"
-
-    output_dir = f"datasets/temp/{args.name}"
+    samples = json.load(open(f"datasets/{name}.json", "r"))
+    answer_key = f"answer_{chat_type}"
+    output_dir = f"datasets/temp/{name}"
     _ensure_dir(output_dir)
 
     # 从 temp 恢复已生成的答案（用于异常终止后的断点续跑）
-    restored = _recover_answers_from_temp(samples, answer_key, output_dir, args.name)
+    restored = _recover_answers_from_temp(samples, answer_key, output_dir, name)
     if restored:
         print(f"已从temp恢复答案条目: {restored}")
 
@@ -241,15 +211,15 @@ def main():
     if processed_indices:
         print(f"已存在答案的样本数: {len(processed_indices)} / {len(samples)}")
 
-    if args.merge_only:
-        final_path = f"datasets/answers/{args.name}_with_answers.json"
+    if merge_only:
+        final_path = f"datasets/answers/{name}_with_answers.json"
         with open(final_path, "w", encoding="utf-8") as f:
             json.dump(samples, f, indent=4, ensure_ascii=False)
         print(f"已完成整合并保存到 {final_path}")
         return
 
     total = len(samples)
-    worker_count = max(1, args.workers)
+    worker_count = max(1, workers)
     slices = _split_indices_contiguous(total, worker_count)
     if not slices:
         print("输入数据为空")
@@ -259,7 +229,7 @@ def main():
 
     def worker_task(worker_id: int, start: int, end: int):
         thread_no = worker_id + 1
-        thread_out_path = os.path.join(output_dir, f"{args.name}_{thread_no}.json")
+        thread_out_path = os.path.join(output_dir, f"{name}_{thread_no}.json")
         thread_results = []
 
         # If file already exists, load it so we can continue appending.
@@ -279,9 +249,7 @@ def main():
                 continue
 
             try:
-                answers = process_sample(
-                    index, samples[index], args.chat_type, args.model, args.hint
-                )
+                answers = process_sample(index, samples[index], chat_type, model, hint)
                 with progress_lock:
                     answer = answers[0].content
                     if "thinking" in answer:
@@ -316,7 +284,7 @@ def main():
             future.result()
 
     # 答案整合：所有线程都处理完后，输出最终答案文件
-    final_path = f"datasets/answers/{args.name}_with_answers.json"
+    final_path = f"datasets/answers/{name}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
 
@@ -324,4 +292,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(
+        name="sample",
+        chat_type="single",
+        model="",
+        workers=1,
+        merge_only=False,
+        hint="hint",
+    )

@@ -2,7 +2,6 @@
 检查模型生成的答案是否存在自然语言理解错误或推理错误，并给出相应的分析。
 """
 
-import argparse
 import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
@@ -331,31 +330,10 @@ def _split_indices_contiguous(total: int, workers: int):
     return slices
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Verify generated questions and answers with LLM assistance"
-    )
-    parser.add_argument(
-        "--path",
-        required=True,
-        help="Input dataset files or dataset names",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="并行校验线程数",
-    )
-    # parser.add_argument(
-    #     "--model",
-    #     type=str,
-    #     default="qwen3.5-plus",
-    #     help="Model name for call_api",
-    # )
-    args = parser.parse_args()
-    model = args.model if hasattr(args, "model") else "qwen3.5-plus"
-
-    input_path = f"datasets/answers/{args.path}_with_answers.json"
+def main(path, workers=1, model="qwen3.5-plus"):
+    if not path:
+        raise ValueError("path is required")
+    input_path = f"datasets/answers/{path}_with_answers.json"
     report: Dict[str, Any] = {
         "meta": {
             "inputs": input_path,
@@ -368,7 +346,7 @@ def main():
         "samples": [],
     }
 
-    temp_dir = f"datasets/temp/{args.path}_explain"
+    temp_dir = f"datasets/temp/{path}_explain"
     _ensure_dir(temp_dir)
     print(f"[debug] Temp checkpoint dir: {temp_dir}")
 
@@ -376,7 +354,7 @@ def main():
     print(f"[debug] Loaded {len(data)} samples from {input_path}")
 
     total = len(data)
-    worker_count = max(1, args.workers)
+    worker_count = max(1, workers)
     slices = _split_indices_contiguous(total, worker_count)
     if not slices:
         print("[debug] 输入数据为空")
@@ -387,7 +365,7 @@ def main():
 
     def worker_task(worker_id: int, start: int, end: int):
         print(f"[debug] Worker {worker_id + 1} handling range [{start}, {end})")
-        worker_out_path = os.path.join(temp_dir, f"{args.path}_{worker_id + 1}.json")
+        worker_out_path = os.path.join(temp_dir, f"{path}_{worker_id + 1}.json")
         local_results = []
         local_total = 0
         local_ok = 0
@@ -470,7 +448,7 @@ def main():
     report["samples"] = [item[1] for item in merged_results]
 
     with open(
-        f"datasets/explain/{args.path}_with_explanation.json", "w", encoding="utf-8"
+        f"datasets/explain/{path}_with_explanation.json", "w", encoding="utf-8"
     ) as f:
         json.dump(report, f, ensure_ascii=False, indent=4)
 
@@ -482,4 +460,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(path="sample", workers=1, model="qwen3.5-plus")

@@ -4,6 +4,8 @@ import csv
 
 
 def sample_check(sample):
+    if sample["answer_single"][0].strip().startswith("<think>"):
+        return False
     return sample["answer_single"][0].strip() == sample["target"]["rel"]
 
 
@@ -224,61 +226,82 @@ def overlap_check():
             )
 
 
-def count():
-    parser = argparse.ArgumentParser(description="Run script with parameters")
-    parser.add_argument("--name", type=str, required=True, help="校验的文件名")
-    args = parser.parse_args()
-    with open(
-        f"datasets/answers/{args.name}_with_answers.json", "r", encoding="utf-8"
-    ) as f:
+# deprecated
+# def count():
+#     parser = argparse.ArgumentParser(description="Run script with parameters")
+#     parser.add_argument("--name", type=str, required=True, help="校验的文件名")
+#     args = parser.parse_args()
+#     with open(
+#         f"datasets/answers/{args.name}_with_answers.json", "r", encoding="utf-8"
+#     ) as f:
+#         data = json.load(f)
+
+#     level1 = 0
+#     level2 = 0
+#     right = 0
+#     level1_true = 0
+#     level2_true = 0
+#     i, j = 0, 0
+#     for item in data:
+#         check = 1 if sample_check(item) else 0
+#         if len(item["paths"]) == 1:
+#             if item["level"] == 1:
+#                 level1 += 1
+#                 level1_true += check
+#                 if check == 0 and i < 20:
+#                     answer = item["answer_single"][0].strip()
+#                     if answer.startswith("<think>"):
+#                         answer = "None"
+#                     print(
+#                         f"level1错误样例: target={item['target']['rel']}, answer={answer}"
+#                     )
+#                     i += 1
+#             elif item["level"] == 2:
+#                 level2 += 1
+#                 level2_true += check
+#                 if check == 0 and j < 20:
+#                     answer = item["answer_single"][0].strip()
+#                     if answer.startswith("<think>"):
+#                         answer = "None"
+#                     print(
+#                         f"level2错误样例: target={item['target']['rel']}, answer={answer}"
+#                     )
+#                     j += 1
+#         else:
+#             right += check
+#             if check == 0:
+#                 answer = item["answer_single"][0].strip()
+#                 if answer.startswith("<think>"):
+#                     answer = "None"
+#                 print(
+#                     f"id {item['id']}: target={item['target']['rel']}, answer={answer}"
+#                 )
+
+#     if len(data[0]["paths"]) == 1:
+#         print(f"Level 1 Accuracy: {level1_true}/{level1} = {level1_true/level1:.4f}")
+#         print(f"Level 2 Accuracy: {level2_true}/{level2} = {level2_true/level2:.4f}")
+#     else:
+#         print(f"Overall Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
+
+
+def answer_verify(name):
+    if not name:
+        raise ValueError("name is required")
+    with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    level1 = 0
-    level2 = 0
-    right = 0
-    level1_true = 0
-    level2_true = 0
-    i, j = 0, 0
     for item in data:
-        check = 1 if sample_check(item) else 0
-        if len(item["paths"]) == 1:
-            if item["level"] == 1:
-                level1 += 1
-                level1_true += check
-                if check == 0 and i < 20:
-                    answer = item["answer_single"][0].strip()
-                    if answer.startswith("<think>"):
-                        answer = "None"
-                    print(
-                        f"level1错误样例: target={item['target']['rel']}, answer={answer}"
-                    )
-                    i += 1
-            elif item["level"] == 2:
-                level2 += 1
-                level2_true += check
-                if check == 0 and j < 20:
-                    answer = item["answer_single"][0].strip()
-                    if answer.startswith("<think>"):
-                        answer = "None"
-                    print(
-                        f"level2错误样例: target={item['target']['rel']}, answer={answer}"
-                    )
-                    j += 1
-        else:
-            right += check
-            if check == 0:
-                answer = item["answer_single"][0].strip()
-                if answer.startswith("<think>"):
-                    answer = "None"
-                print(
-                    f"id {item['id']}: target={item['target']['rel']}, answer={answer}"
-                )
-
-    if len(data[0]["paths"]) == 1:
-        print(f"Level 1 Accuracy: {level1_true}/{level1} = {level1_true/level1:.4f}")
-        print(f"Level 2 Accuracy: {level2_true}/{level2} = {level2_true/level2:.4f}")
-    else:
-        print(f"Overall Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
+        item["right"] = sample_check(item)
+        check = 1 if item["right"] else 0
+        right += check
+    json.dump(
+        data,
+        open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8"),
+        ensure_ascii=False,
+        indent=4,
+    )
+    print(f"Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
+    return right
 
 
 def link_count():
@@ -338,12 +361,20 @@ def link_count():
         json.dump(new_test, f, ensure_ascii=False, indent=4)
 
 
-def main():
-    link_count()
+def main(mode="answer_verify", name=None, names=None, show=5):
+    if mode == "answer_verify":
+        answer_verify(name)
+    # elif mode == "overlap_check":
+    #     overlap_check(names, show)
+    # elif mode == "model_error_overlap_check":
+    #     model_error_overlap_check(names, show)
+    else:
+        raise ValueError(f"Unsupported mode: {mode}")
+    # link_count()
     # count()
     # model_error_overlap_check()
     # overlap_check()
 
 
 if __name__ == "__main__":
-    main()
+    main(mode="answer_verify", name="sample")
