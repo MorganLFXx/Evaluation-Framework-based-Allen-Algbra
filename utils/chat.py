@@ -68,7 +68,7 @@ def call_pony_api(messages, call_model) -> str:
             temperature=0,
             max_tokens=20000,
             stream=False,
-            timeout=300,  # 5分钟超时
+            timeout=400,
             extra_body={"chat_template_kwargs": {"thinking": True}},
         )
     except Exception as e:
@@ -76,7 +76,7 @@ def call_pony_api(messages, call_model) -> str:
     return response.choices[0].message.content
 
 
-def call_tongyi_api(messages, call_model="qwen3.5-plus-2026-02-15") -> str:
+def call_tongyi_api(messages, call_model="qwen3.5-plus") -> str:
     client = OpenAI(
         api_key=tongyi_apikey,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -87,9 +87,9 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus-2026-02-15") -> str:
             model=call_model,
             messages=messages,
             temperature=0,
-            max_tokens=20000,
+            max_tokens=50000,
             stream=False,
-            timeout=300,  # 5分钟超时
+            timeout=400,  # 5分钟超时
             extra_body={"enable_thinking": True},
         )
     except Exception as e:
