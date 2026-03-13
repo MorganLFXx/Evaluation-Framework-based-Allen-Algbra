@@ -255,7 +255,7 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
                     if "thinking" in answer:
                         answer = parse_json_block(answer)
                         samples[index][answer_key] = [answer.get("answer_single", "")]
-                        samples[index]["thinking"] = answer.get("thinking", "")
+                        # samples[index]["thinking"] = answer.get("thinking", "")
                     else:
                         samples[index][answer_key] = [answer]
                     samples[index]["reasoning_content"] = answers[0].reasoning_content
