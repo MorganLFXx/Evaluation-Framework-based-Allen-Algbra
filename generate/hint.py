@@ -211,10 +211,9 @@ full, concur
 def no_determine_length(rel):
     if rel not in ["F", "f", "D", "d", "s", "S", "e"]:
         choice = [
-            # "Cannot determine which event '{event_l}' or '{event_r}' lasts longer",
-            # "It is unclear which event '{event_l}' or '{event_r}' has a longer duration",
-            # "The lengths of events '{event_l}' and '{event_r}' cannot be compared",
-            "The Allen relation between '{event_l}' and '{event_r}' specifies temporal ordering, not relative duration.",
+            "Cannot determine which event '{event_l}' or '{event_r}' lasts longer",
+            "It is unclear which event '{event_l}' or '{event_r}' has a longer duration",
+            "The lengths of events '{event_l}' and '{event_r}' cannot be compared",
         ]
         return {
             "hint": random.choice(choice),
