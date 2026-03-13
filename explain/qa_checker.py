@@ -226,70 +226,13 @@ def overlap_check():
             )
 
 
-# deprecated
-# def count():
-#     parser = argparse.ArgumentParser(description="Run script with parameters")
-#     parser.add_argument("--name", type=str, required=True, help="校验的文件名")
-#     args = parser.parse_args()
-#     with open(
-#         f"datasets/answers/{args.name}_with_answers.json", "r", encoding="utf-8"
-#     ) as f:
-#         data = json.load(f)
-
-#     level1 = 0
-#     level2 = 0
-#     right = 0
-#     level1_true = 0
-#     level2_true = 0
-#     i, j = 0, 0
-#     for item in data:
-#         check = 1 if sample_check(item) else 0
-#         if len(item["paths"]) == 1:
-#             if item["level"] == 1:
-#                 level1 += 1
-#                 level1_true += check
-#                 if check == 0 and i < 20:
-#                     answer = item["answer_single"][0].strip()
-#                     if answer.startswith("<think>"):
-#                         answer = "None"
-#                     print(
-#                         f"level1错误样例: target={item['target']['rel']}, answer={answer}"
-#                     )
-#                     i += 1
-#             elif item["level"] == 2:
-#                 level2 += 1
-#                 level2_true += check
-#                 if check == 0 and j < 20:
-#                     answer = item["answer_single"][0].strip()
-#                     if answer.startswith("<think>"):
-#                         answer = "None"
-#                     print(
-#                         f"level2错误样例: target={item['target']['rel']}, answer={answer}"
-#                     )
-#                     j += 1
-#         else:
-#             right += check
-#             if check == 0:
-#                 answer = item["answer_single"][0].strip()
-#                 if answer.startswith("<think>"):
-#                     answer = "None"
-#                 print(
-#                     f"id {item['id']}: target={item['target']['rel']}, answer={answer}"
-#                 )
-
-#     if len(data[0]["paths"]) == 1:
-#         print(f"Level 1 Accuracy: {level1_true}/{level1} = {level1_true/level1:.4f}")
-#         print(f"Level 2 Accuracy: {level2_true}/{level2} = {level2_true/level2:.4f}")
-#     else:
-#         print(f"Overall Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
-
-
 def answer_verify(name):
     if not name:
         raise ValueError("name is required")
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    right = 0
     for item in data:
         item["right"] = sample_check(item)
         check = 1 if item["right"] else 0

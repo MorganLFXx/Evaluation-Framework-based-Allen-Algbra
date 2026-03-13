@@ -348,7 +348,7 @@ def main(path, workers=1, model="qwen3.5-plus"):
 
     temp_dir = f"datasets/temp/{path}_explain"
     _ensure_dir(temp_dir)
-    print(f"[debug] Temp checkpoint dir: {temp_dir}")
+    # print(f"[debug] Temp checkpoint dir: {temp_dir}")
 
     data = _read_json(input_path)
     print(f"[debug] Loaded {len(data)} samples from {input_path}")

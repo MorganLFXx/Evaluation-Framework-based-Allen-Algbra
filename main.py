@@ -292,9 +292,9 @@ def main():
         right = qa_checker.answer_verify(args.name)
         # 4. 错误校验
         error_checker.main(
-            path=f"datasets/answers/{args.name}_with_answers.json",
+            path=args.name,
             workers=(
-                right // 8 + 1
+                right // 8
             ),  # 根据正确率动态调整错误校验的线程数，避免过多线程导致API调用过快
             model=args.model,
         )
