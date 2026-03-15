@@ -1,6 +1,7 @@
 import json
 import os
 import glob
+import shutil
 from utils.chat import call_api, call_thinking_api
 from utils.format import parse_json_block
 from time import sleep
@@ -255,10 +256,17 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
                     if "thinking" in answer:
                         answer = parse_json_block(answer)
                         samples[index][answer_key] = [answer.get("answer_single", "")]
-                        # samples[index]["thinking"] = answer.get("thinking", "")
+                        samples[index]["thinking"] = answer.get("thinking", "")
                     else:
                         samples[index][answer_key] = [answer]
-                    samples[index]["reasoning_content"] = answers[0].reasoning_content
+                    # if "reasoning_content" in answer:
+                    #     samples[index]["reasoning_content"] = answers[
+                    #         0
+                    #     ].reasoning_content
+                    # elif "reasoning" in answer:
+                    #     samples[index]["reasoning_content"] = answers[0].reasoning
+                    # else:
+                    #     samples[index]["reasoning_content"] = ""
                     processed_indices.add(index)
 
                 thread_results.append({"index": index, "sample": samples[index]})
@@ -287,6 +295,9 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
     final_path = f"datasets/answers/{name}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
+
+    # 删除 temp 文件夹
+    shutil.rmtree(output_dir)
 
     print(f"Generated answers and saved to {final_path}")
 

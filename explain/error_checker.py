@@ -4,6 +4,7 @@
 
 import json
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -451,6 +452,9 @@ def main(path, workers=1, model="qwen3.5-plus"):
         f"datasets/explain/{path}_with_explanation.json", "w", encoding="utf-8"
     ) as f:
         json.dump(report, f, ensure_ascii=False, indent=4)
+
+    # 删除临时文件夹
+    shutil.rmtree(temp_dir)
 
     print(
         "Done. total={total}, ok={ok}, nlu_errors={nlu_errors}, reasoning_errors={reasoning_errors}".format(
