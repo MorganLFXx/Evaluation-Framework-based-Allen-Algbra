@@ -249,8 +249,6 @@ def main():
     pipeline_parser.add_argument(
         "--skip-error-check",
         action="store_true",
-        choices=[True, False],
-        default=True,
         help="Whether to skip error checking in the full pipeline",
     )
 
