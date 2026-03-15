@@ -4,6 +4,7 @@ the parse_args should be parsed here
 """
 
 import argparse
+import os
 
 from generate import generate_data
 from generate import generate_response
@@ -237,7 +238,20 @@ def main():
         "--model",
         type=str,
         default="deepseek-v3.2",
-        help="Model name for response generation and error checking in the full pipeline",
+        help="Model name for response generation in the full pipeline",
+    )
+    pipeline_parser.add_argument(
+        "--check-model",
+        type=str,
+        default="qwen3.5-plus",
+        help="Model name for answer verification in the full pipeline",
+    )
+    pipeline_parser.add_argument(
+        "--skip-error-check",
+        action="store_true",
+        choices=[True, False],
+        default=True,
+        help="Whether to skip error checking in the full pipeline",
     )
 
     args = parser.parse_args()
@@ -272,13 +286,14 @@ def main():
             model=args.model,
         )
     elif args.command == "pipeline":
-        # 1. 数据生成
-        generate_data.main(
-            n=args.n,
-            name=args.name,
-            depth=args.depth,
-            hint="indirect pos",
-        )
+        # 1. 数据生成(如果已有则跳过)
+        if not os.path.exists(f"datasets/{args.name}.json"):
+            generate_data.main(
+                n=args.n,
+                name=args.name,
+                depth=args.depth,
+                hint="indirect pos",
+            )
         # 2. 回答生成
         generate_response.main(
             name=args.name,
@@ -290,14 +305,16 @@ def main():
         )
         # 3. 答案校验
         right = qa_checker.answer_verify(args.name)
-        # 4. 错误校验
-        error_checker.main(
-            path=args.name,
-            workers=(
-                right // 8
-            ),  # 根据正确率动态调整错误校验的线程数，避免过多线程导致API调用过快
-            model=args.model,
-        )
+        print(f"Answer verification completed. Correct answers: {right}")
+        # 4. 错误校验(暂时跳过)
+        if not args.skip_error_check:
+            error_checker.main(
+                path=args.name,
+                workers=(
+                    right // 8
+                ),  # 根据正确率动态调整错误校验的线程数，避免过多线程导致API调用过快
+                model=args.check_model,
+            )
     else:
         parser.print_help()
 
