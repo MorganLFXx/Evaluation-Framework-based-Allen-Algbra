@@ -2,6 +2,7 @@ import json
 import os
 import glob
 import shutil
+
 from utils.chat import call_api, call_thinking_api
 from utils.format import parse_json_block
 from time import sleep
@@ -18,6 +19,7 @@ Here are some things to note:
 The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
 Note: Allen relation can be converted to timeline. Each one indicates unique sequence of start and end time points for two events.
 """
+# 2. Please don't overthink. If you get the answer, don't check it over and over again.
 
 post_question = """I will provide all hints step by step. 
 For each hint, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
@@ -28,13 +30,12 @@ If there are more than six possibilities, you only need to answer 'I can not det
 
 detail_post_question = """I will provide all hints step by step. 
 For each hint, you must provide your interpretation. You should only start reasoning after all prompts have been interpreted. 
-You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning(Please make sure you considering each one hint), 
+You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning, 
 before finally answering with the abbreviations of final answer after all hints have been provided.
-If there are more than six possibilities, you only need to answer 'I can not determine'.
 Output ONLY JSON with fields: \n
 {
+    "thinking": "Summary of your thoughtfully considered thinking process, explaining how each hint influences your reasoning(In the 'hint1: xxx, hint2: xxx, ...' format)"
     "answer_single": "the abbreviation of the final answer",
-    "thinking": "your thoughtfully considered thinking process, explaining how each hint influences your reasoning(In the 'hint1: xxx, hint2: xxx, ...' format)"
 }
 """
 
@@ -72,7 +73,7 @@ def single_chat(sample, model, hint_type):
     hints = sample["hints"]
     question = (
         "Please help me determine the allen relationship between "
-        f"'{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following information steps by steps."
+        f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information steps by steps."
     )
     # question += post_question + "\n"
     question += detail_post_question + "\n"
@@ -252,13 +253,29 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
             try:
                 answers = process_sample(index, samples[index], chat_type, model, hint)
                 with progress_lock:
-                    answer = answers[0].content
-                    if "thinking" in answer:
-                        answer = parse_json_block(answer)
-                        samples[index][answer_key] = [answer.get("answer_single", "")]
-                        samples[index]["thinking"] = answer.get("thinking", "")
+                    if isinstance(answers, str):
+                        samples[index][answer_key] = [answers]
+                    elif isinstance(answers, list) and hasattr(answers[0], "content"):
+                        answer = answers[0].content
+                        if "thinking" in answer:
+                            answer = parse_json_block(answer)
+                            if "answer_single" in answer:
+                                samples[index][answer_key] = [
+                                    answer.get("answer_single", "")
+                                ]
+                            else:
+                                samples[index][answer_key] = ["I can not determine"]
+                            samples[index]["thinking"] = answer.get("thinking", "")
+                        else:
+                            samples[index][answer_key] = [answer]
                     else:
-                        samples[index][answer_key] = [answer]
+                        print(f"first item: {answers[0]}")
+                        # print("first item is dict?" + str(isinstance(answers[0], dict)))
+                        # print("has content?" + str("content" in answers[0]))
+                        # samples[index][answer_key] = [answers]
+                        print(
+                            f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
+                        )
                     # if "reasoning_content" in answer:
                     #     samples[index]["reasoning_content"] = answers[
                     #         0
@@ -274,10 +291,15 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
             except Exception as e:
                 # 错误处理：遇到错误跳过即可
                 print(
-                    f"  ❌ 线程 {thread_no} 处理第 {index + 1} 个用例出错，已跳过: {e}"
+                    f"  ❌ 线程 {thread_no} 处理第 {index + 1} 个用例出错，已跳过: {e}，回答为：{answers}"
                 )
                 thread_results.append(
-                    {"index": index, "skipped": True, "error": str(e)}
+                    {
+                        "index": index,
+                        "skipped": True,
+                        "error": str(e),
+                        "data": answers,
+                    }
                 )
                 _atomic_dump_json(thread_out_path, thread_results)
                 continue
