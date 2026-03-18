@@ -1,5 +1,3 @@
-from multiprocessing.connection import answer_challenge
-
 from dotenv import load_dotenv
 import os
 import requests
@@ -15,9 +13,11 @@ tongyi_apikey = os.getenv("TONGYI_API_KEY")
 
 
 class ResponseModel(BaseModel):
-    answer_single: str = Field(description="The abbreviation of the final answer.")
     thinking: str = Field(
-        description="Your thoughtfully considered thinking process, explaining how each hint influences your reasoning (format: 'hint1: xxx, hint2: xxx, ...')."
+        description="Summary ofyour thoughtfully considered thinking process, explaining how each hint influences your reasoning (format: 'hint1: xxx, hint2: xxx, ...')."
+    )
+    answer_single: str = Field(
+        description="The abbreviation of the final answer.There is only one correct answer. If you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'."
     )
 
 
@@ -61,25 +61,6 @@ def call_deepseek_api(messages, call_model) -> str:
     return response.choices[0].message.content
 
 
-def call_pony_api(messages, call_model) -> str:
-    client = OpenAI(
-        base_url="https://api.tokenpony.cn/v1", api_key=pony_apikey  # 替换为您的API Key
-    )
-    try:
-        response = client.chat.completions.create(
-            model=call_model,
-            messages=messages,
-            temperature=0,
-            max_tokens=20000,
-            stream=False,
-            timeout=400,
-            extra_body={"chat_template_kwargs": {"thinking": True}},
-        )
-    except Exception as e:
-        raise Exception(f"API调用失败: {str(e)}")
-    return response.choices[0].message.content
-
-
 def call_tongyi_api(messages, call_model="qwen3.5-plus") -> dict:
     client = OpenAI(
         api_key=tongyi_apikey,
@@ -91,11 +72,19 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus") -> dict:
             model=call_model,
             messages=messages,
             temperature=0,
-            max_tokens=50000,
+            max_tokens=55000,
             stream=False,
-            timeout=400,  # 5分钟超时
+            timeout=240,  # 5分钟超时
             extra_body={"enable_thinking": True},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "ResponseModel",
+                    "schema": ResponseModel.model_json_schema(),
+                },
+            },
         )
+        # print(response.choices[0])
     except Exception as e:
         print(f"API调用失败: {str(e)}")
         raise Exception(f"API调用失败: {str(e)}")
@@ -110,9 +99,9 @@ def call_local_api(messages, call_model) -> dict:
             model=call_model,
             messages=messages,
             temperature=0,
-            max_tokens=6000,
+            max_tokens=55000,
             stream=False,
-            timeout=400,  # 5分钟超时
+            timeout=300,  # 4分钟超时
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -135,8 +124,30 @@ def call_api(messages, call_model) -> str:
 
 
 def call_thinking_api(messages, call_model) -> dict:
-    # return call_tongyi_api(messages, call_model)
-    return call_local_api(messages, call_model)
+    local_model = [
+        "qwen3.5-2b",
+        "qwen3.5-4b",
+        "qwen3.5-9b",
+        "qwen3.5-9b-gemini",
+        "qwen3.5-27b",
+        "qwen3.5-35b",
+    ]
+    opensource_model = local_model + ["qwen3.5-122b-a10b", "qwen3.5-397b-a17b"]
+    if call_model in opensource_model:
+        messages.extend(  # 使用prompt trick引导模型分离思考过程
+            [
+                {"role": "assistant", "content": "Here is my thinking process:\n"},
+                {
+                    "role": "user",
+                    "content": "\n\nThinking complete. Now, output ONLY the JSON.",
+                },
+            ]
+        )
+
+    if call_model in local_model:
+        return call_local_api(messages, call_model)
+    else:
+        return call_tongyi_api(messages, call_model)
 
 
 def main():
