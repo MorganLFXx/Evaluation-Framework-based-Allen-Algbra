@@ -1,25 +1,12 @@
 import random
 import copy
 import json
-from utils.relation import random_relation, get_composition
+from utils.relation import random_relation, get_composition, composition_table, full
 from utils.db import get_event_by_rel
 from generate.generate_hints import generate_hints
 
 
 def random_event_name(used_names=None):
-    # year events
-    # events_list = [
-    #     "regional war",
-    #     "siege",
-    #     "government revolution",
-    #     "engineering project",
-    #     "invention process",
-    #     "construction",
-    #     "book writing",
-    #     "tour to study",
-    #     "long-term travel",
-    #     "long-distance migration",
-    # ]
     events_list = [
         "A",
         "B",
@@ -37,13 +24,23 @@ def random_event_name(used_names=None):
         "N",
         "O",
         "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z",
     ]
     if used_names is not None:
         available = [e for e in events_list if e not in used_names]
         if available:
             name = random.choice(available)
         else:
-            name = f"{random.choice(events_list)}_{len(used_names)}"
+            name = f"{random.choice(events_list)}{random.choice(events_list)}"
         used_names.add(name)
         return name
     return random.choice(events_list)
@@ -126,19 +123,6 @@ def generate_tree(sample):
     }
 
 
-def build_base_tree(target_rel):
-    events = ["", ""]
-    target = {"l": 0, "r": 1, "rel": target_rel}
-    paths = []
-    new_path = generate_path(target, events, parent=-1)
-    paths.append(new_path)
-    return {
-        "target": target,
-        "events": events,
-        "paths": paths,
-    }
-
-
 """
 # get tree
 1. 判断是否base
@@ -156,7 +140,7 @@ def generate_data(sample, hint_type):
     used_names = set(e for e in events if e != "")
     for i in range(len(events)):
         if events[i] == "":
-            events[i] = random_event_name(used_names)
+            events[i] = random_event_name(used_names) + str(i)
 
     hints, explanations = generate_hints(sample["paths"], events, hint_type)
     sample["hints"] = hints
@@ -188,30 +172,52 @@ def main(n, name, depth=1, hint="indirect pos"):
 
 def main_base():
     # 用于生成所有基本事件
-    with open("datas/all_base_samples.json", "r") as f:
-        samples = json.load(f)
-    for sample in samples:
-        events = sample["events"]
-        used_names = set(e for e in events if e != "")
-        for i in range(len(events)):
-            if events[i] == "":
-                events[i] = random_event_name(used_names)
-        sample = generate_data(sample, hint_type="direct neg")
-    with open("datasets/test_base_neg.json", "w") as f:
-        json.dump(samples, f, indent=4, ensure_ascii=False)
+    id = 0
+    datas = []
+    for pair in composition_table.items():
+        key, value = pair
+        if value == full:
+            continue
+        rel1, rel2 = key
+        for rel in value:
+            events = ["", "", ""]
+            target = {"l": 0, "r": 1, "rel": rel}
+            excluded = [r for r in value if r != rel]
+            new_path = {
+                "target": rel,
+                "path": [rel1, rel2],
+                "excluded": excluded,
+                "parent": -1,
+                "left": -1,
+                "right": -1,
+                "base_event": [0, 1],
+                "new_event": 2,
+            }
+            sample = {
+                "id": id,
+                "target": target,
+                "events": events,
+                "paths": [new_path],
+            }
+            id += 1
+            data = generate_data(sample, "indirect pos")
+            datas.append(data)
+    print(f"Generated {len(datas)} base samples.")
+    with open("datasets/test_bases.json", "w") as f:
+        json.dump(datas, f, indent=4, ensure_ascii=False)
 
 
 def main_link_length():
     # 用于检查不同链路长度造成的影响，基于同一个target生成不同长度的路径树
-    depth_list = [3, 8, 15]
-    with open("datasets/answers/test_100_d5_fix_with_answers.json", "r") as f:
+    # 截取10个bases
+    with open("datasets/answers/test_bases_4b2_with_answers.json", "r") as f:
         samples = json.load(f)
     right_bases = []
     error_bases = []
     for sample in samples:
-        check = (
-            1 if sample["answer_single"][0].strip() == sample["target"]["rel"] else 0
-        )
+        if not "right" in sample:
+            continue
+        check = 1 if sample["right"] == True else 0
         target = {
             "target": sample["target"],
             "events": sample["events"][:3],
@@ -223,48 +229,53 @@ def main_link_length():
             right_bases.append(target)
         else:
             error_bases.append(target)
-    # 截取10个right bases
-    right_bases = right_bases[:10]
-    error_bases = error_bases[:10]
-    # 基于每个right base生成不同链路长度的样例,每个不同样例的不同链路长度生成5个样例
-    new_right = []
-    for i in range(10):
-        new_sample = generate_data(right_bases[i], hint_type="indirect pos")
-        new_right.append(new_sample)
-        new_right[i]["id"] = i
-        new_right[i]["right"] = True
-    for i in range(10, 20):
-        new_sample = generate_data(error_bases[i - 10], hint_type="indirect pos")
-        new_right.append(new_sample)
-        new_right[i]["id"] = i
-        new_right[i]["right"] = False
-    id = 20
+    right_bases = random.sample(right_bases, 2)
+    error_bases = random.sample(error_bases, 2)
 
+    # 基于每个right/error base生成不同链路长度的样例,每个不同样例的不同链路长度生成20个样例
+    # 每个base作为开头
+    new_data = []
+    depth_list = range(3, 31, 3)
+    id = 0
     for base in right_bases:
+        first_base = generate_data(base, hint_type="indirect pos")
+        first_base["id"] = id
+        first_base["chose_right"] = True
+        first_base["is_base"] = True
+        id += 1
+        new_data.append(first_base)
         for depth in depth_list:
-            for _ in range(4):
+            for _ in range(10):
                 tree = copy.deepcopy(base)
                 while len(tree["paths"]) < depth:
                     tree = generate_tree(tree)
                 tree = generate_data(tree, hint_type="indirect pos")
                 tree["id"] = id
-                tree["right"] = True
+                tree["chose_right"] = True
+                tree["is_base"] = False
                 id += 1
-                new_right.append(tree)
+                new_data.append(tree)
     for base in error_bases:
+        first_base = generate_data(base, hint_type="indirect pos")
+        first_base["id"] = id
+        first_base["chose_right"] = False
+        first_base["is_base"] = True
+        id += 1
+        new_data.append(first_base)
         for depth in depth_list:
-            for _ in range(4):
+            for _ in range(10):
                 tree = copy.deepcopy(base)
                 while len(tree["paths"]) < depth:
                     tree = generate_tree(tree)
                 tree = generate_data(tree, hint_type="indirect pos")
                 tree["id"] = id
-                tree["right"] = False
+                tree["chose_right"] = False
+                tree["is_base"] = False
                 id += 1
-                new_right.append(tree)
+                new_data.append(tree)
 
-    with open("datasets/test_link_len.json", "w") as f:
-        json.dump(new_right, f, indent=4, ensure_ascii=False)
+    with open("datasets/test_len_dense.json", "w") as f:
+        json.dump(new_data, f, indent=4, ensure_ascii=False)
 
 
 # def main_all_real():
@@ -301,10 +312,10 @@ def main_link_length():
 
 if __name__ == "__main__":
     # general sample
-    main(n=1, name="sample", depth=1, hint="direct neg")
+    # main(n=1, name="sample", depth=1, hint="direct neg")
     # all real base sample
     # main_all_real()
     # all base samples
     # main_base()
     # link length samples
-    # main_link_length()
+    main_link_length()
