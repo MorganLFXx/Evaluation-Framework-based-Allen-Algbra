@@ -232,18 +232,26 @@ def answer_verify(name):
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    has_checked = "right" in data[0]
+
     right = 0
+    skip = 0
     for item in data:
+        if "answer_single" not in item:
+            skip += 1
+            continue
         item["right"] = sample_check(item)
         check = 1 if item["right"] else 0
         right += check
-    json.dump(
-        data,
-        open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8"),
-        ensure_ascii=False,
-        indent=4,
-    )
-    print(f"Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
+    if not has_checked:
+        json.dump(
+            data,
+            open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+        )
+    # print(f"Get response error: {skip}")
+    print(f"Skip: {skip}, Accuracy: {right}/{len(data)-skip} = {right/(len(data)-skip):.4f}")
     return right
 
 
