@@ -51,17 +51,19 @@ def call_deepseek_api(messages, call_model) -> str:
             model="deepseek-reasoner",
             messages=messages,
             temperature=0,
-            max_tokens=40000,
-            timeout=300,  # 5分钟超时
+            max_tokens=55000,
             stream=False,
+            timeout=300,  # 5分钟超时
+            extra_body={"enable_thinking": True},
+            # response_format={"type": "json_object"},
         )
     except Exception as e:
         raise Exception(f"API调用失败: {str(e)}")
 
-    return response.choices[0].message.content
+    return response.choices[0].message
 
 
-def call_tongyi_api(messages, call_model="qwen3.5-plus") -> dict:
+def call_tongyi_api(messages, call_model="qwen3.5-plus"):
     client = OpenAI(
         api_key=tongyi_apikey,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -74,7 +76,7 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus") -> dict:
             temperature=0,
             max_tokens=55000,
             stream=False,
-            timeout=240,  # 5分钟超时
+            timeout=300,  # 5分钟超时
             extra_body={"enable_thinking": True},
             response_format={
                 "type": "json_schema",
@@ -85,6 +87,7 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus") -> dict:
             },
         )
         # print(response.choices[0])
+        # print(response.usage.total_tokens)
     except Exception as e:
         print(f"API调用失败: {str(e)}")
         raise Exception(f"API调用失败: {str(e)}")
@@ -101,7 +104,7 @@ def call_local_api(messages, call_model) -> dict:
             temperature=0,
             max_tokens=55000,
             stream=False,
-            timeout=300,  # 4分钟超时
+            timeout=300,  # 5分钟超时
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -146,6 +149,8 @@ def call_thinking_api(messages, call_model) -> dict:
 
     if call_model in local_model:
         return call_local_api(messages, call_model)
+    elif call_model.startswith("deepseek"):
+        return call_deepseek_api(messages, call_model)
     else:
         return call_tongyi_api(messages, call_model)
 
