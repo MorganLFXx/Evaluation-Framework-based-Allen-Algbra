@@ -199,11 +199,11 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
 
     samples = json.load(open(f"datasets/{name}.json", "r"))
     answer_key = f"answer_{chat_type}"
-    output_dir = f"datasets/temp/{name}"
-    _ensure_dir(output_dir)
+    temp_dir = f"datasets/temp/{name}_{model}"
+    _ensure_dir(temp_dir)
 
     # 从 temp 恢复已生成的答案（用于异常终止后的断点续跑）
-    restored = _recover_answers_from_temp(samples, answer_key, output_dir, name)
+    restored = _recover_answers_from_temp(samples, answer_key, temp_dir, name)
     if restored:
         print(f"已从temp恢复答案条目: {restored}")
 
@@ -231,7 +231,7 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
 
     def worker_task(worker_id: int, start: int, end: int):
         thread_no = worker_id + 1
-        thread_out_path = os.path.join(output_dir, f"{name}_{thread_no}.json")
+        thread_out_path = os.path.join(temp_dir, f"{name}_{thread_no}.json")
         thread_results = []
 
         # If file already exists, load it so we can continue appending.
@@ -319,7 +319,7 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
         json.dump(samples, f, indent=4, ensure_ascii=False)
 
     # 删除 temp 文件夹
-    shutil.rmtree(output_dir)
+    shutil.rmtree(temp_dir)
 
     print(f"Generated answers and saved to {final_path}")
 
