@@ -21,22 +21,26 @@ Note: Allen relation can be converted to timeline. Each one indicates unique seq
 """
 # 2. Please don't overthink. If you get the answer, don't check it over and over again.
 
-post_question = """I will provide all hints step by step. 
-For each hint, you must guess all possible relationships answer and only answer directly the abbreviations of these relationships.
-You should only answer directly the abbreviations of final answer after all hints have been provided.
-Remember no need to provide me with the thought process. Just provide your thoughtfully considered answer.
-If there are more than six possibilities, you only need to answer 'I can not determine'.
+post_question = """
+For each hint, you should carefully consider how to interpret and only start reasoning after all hints have been interpreted. 
+You should thoughtfully consider the answer, noting how each hint influences your reasoning, 
+before finally answering with the abbreviations of final answer. 
+Only give the abbreviation of the final answer. There is only one correct answer. But if you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'.
+Note: Just give the final answer(the abbreviation of the allen relation), don't explain how you get the answer.
 """
 
-detail_post_question = """I will provide all hints step by step. 
-For each hint, you must provide your interpretation. You should only start reasoning after all prompts have been interpreted. 
-You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning, 
-before finally answering with the abbreviations of final answer after all hints have been provided.
+detail_post_question = """
+For each hint, you must provide your interpretation. You should only start reasoning after all hints have been interpreted.
+You should provide your thoughtfully considered thinking process, explaining how each hint influences your reasoning,
+before finally answering with the abbreviations of final answer.
 Output ONLY JSON with fields: \n
 {
-    "thinking": "Summary of your thoughtfully considered thinking process, explaining how each hint influences your reasoning(In the 'hint1: xxx, hint2: xxx, ...' format)"
-    "answer_single": "the abbreviation of the final answer",
+    "thinking": "Summary of your thoughtfully considered thinking process",
+    "answer_single": "The abbreviation of the final answer. If you still have multiple answers and cannot decide, answer all of them."
 }
+Note: 
+1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. In hint interpretation phase, you should interpret basic meaning of all hints one by one. In reasoning phase, you should provide thinking process bases on the interpreted hints.
+2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """
 
 
@@ -73,7 +77,8 @@ def single_chat(sample, model, hint_type):
     hints = sample["hints"]
     question = (
         "Please help me determine the allen relationship between "
-        f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information steps by steps."
+        f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information."
+        # f"'{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following information."
     )
     # question += post_question + "\n"
     question += detail_post_question + "\n"
@@ -84,7 +89,6 @@ def single_chat(sample, model, hint_type):
         question += f"Here is the story:{sample['story']}\n"
 
     messages = [
-        # {"role": "system", "content": allen_helper + few_shot_examples},
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
     ]
@@ -269,10 +273,6 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
                         else:
                             samples[index][answer_key] = [answer]
                     else:
-                        print(f"first item: {answers[0]}")
-                        # print("first item is dict?" + str(isinstance(answers[0], dict)))
-                        # print("has content?" + str("content" in answers[0]))
-                        # samples[index][answer_key] = [answers]
                         print(
                             f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
                         )
