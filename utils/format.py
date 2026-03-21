@@ -27,8 +27,7 @@ def parse_json_block(text: str) -> Optional[Dict]:
 
 
 def main():
-    test_input = """
-    {\n    "thinking": "hint1: \'M0\' starts eets Q1.",\n    "answer_single": "m"\n}"""
+    test_input = """{"answer_single": "S", "thinking": "hint1."}"""
     processed = parse_json_block(test_input)
     print(processed)
     print("Answer:" + processed.get("answer_single", ""))
