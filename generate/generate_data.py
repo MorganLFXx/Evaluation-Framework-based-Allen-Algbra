@@ -41,6 +41,8 @@ def random_event_name(used_names=None):
             name = random.choice(available)
         else:
             name = f"{random.choice(events_list)}{random.choice(events_list)}"
+            while name in used_names:
+                name = f"{random.choice(events_list)}{random.choice(events_list)}"
         used_names.add(name)
         return name
     return random.choice(events_list)
@@ -207,6 +209,25 @@ def main_base():
         json.dump(datas, f, indent=4, ensure_ascii=False)
 
 
+def main_debug_base_tree():
+    with open(
+        "datasets/answers/debug_before_only_wrong_nonum_with_answers.json", "r"
+    ) as f:
+        data = json.load(f)
+    new_data = []
+    for item in data:
+        del item["answer_single"]
+        del item["right"]
+        del item["hints"]
+        del item["thinking"]
+        del item["chose_right"]
+        item["events"] = ["" for _ in range(len(item["events"]))]
+        tree = generate_data(item, hint_type="indirect pos")
+        new_data.append(tree)
+    with open("datasets/debug_new_hint_num_event_no_num_query.json", "w") as f:
+        json.dump(new_data, f, indent=4, ensure_ascii=False)
+
+
 def main_link_length():
     # 用于检查不同链路长度造成的影响，基于同一个target生成不同长度的路径树
     # 截取10个bases
@@ -319,3 +340,5 @@ if __name__ == "__main__":
     # main_base()
     # link length samples
     main_link_length()
+    # debug
+    # main_debug_base_tree()
