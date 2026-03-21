@@ -12,12 +12,25 @@ deepseek_apikey = os.getenv("DEEPSEEK_API_KEY")
 tongyi_apikey = os.getenv("TONGYI_API_KEY")
 
 
+local_model = [
+    "qwen3.5-2b",
+    "qwen3.5-4b",
+    "qwen3.5-9b",
+    "qwen3.5-9b-gemini",
+    "qwen3.5-27b",
+    "qwen3.5-35b",
+]
+opensource_model = local_model + ["qwen3.5-122b-a10b", "qwen3.5-397b-a17b"]
+
+
 class ResponseModel(BaseModel):
     thinking: str = Field(
-        description="Summary ofyour thoughtfully considered thinking process, explaining how each hint influences your reasoning (format: 'hint1: xxx, hint2: xxx, ...')."
+        description="Summary of your thoughtfully considered thinking process(Use the '1. Hint Interpretion Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format)",
     )
     answer_single: str = Field(
-        description="The abbreviation of the final answer.There is only one correct answer. If you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'."
+        description="The abbreviation of the final answer.If you still have multiple answers and cannot decide, answer all of them."
+        # " You can only reply 'I can not determine' when there are more than six possible outcomes with uncertain probabilities."
+        # There is only one correct answer. If you still have multiple answers and cannot decide, answer all of them.
     )
 
 
@@ -78,13 +91,17 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus"):
             stream=False,
             timeout=300,  # 5分钟超时
             extra_body={"enable_thinking": True},
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "ResponseModel",
-                    "schema": ResponseModel.model_json_schema(),
-                },
-            },
+            response_format=(
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "ResponseModel",
+                        "schema": ResponseModel.model_json_schema(),
+                    },
+                }
+                if call_model in opensource_model
+                else {"type": "json_object"}
+            ),
         )
         # print(response.choices[0])
         # print(response.usage.total_tokens)
@@ -127,15 +144,6 @@ def call_api(messages, call_model) -> str:
 
 
 def call_thinking_api(messages, call_model) -> dict:
-    local_model = [
-        "qwen3.5-2b",
-        "qwen3.5-4b",
-        "qwen3.5-9b",
-        "qwen3.5-9b-gemini",
-        "qwen3.5-27b",
-        "qwen3.5-35b",
-    ]
-    opensource_model = local_model + ["qwen3.5-122b-a10b", "qwen3.5-397b-a17b"]
     if call_model in opensource_model:
         messages.extend(  # 使用prompt trick引导模型分离思考过程
             [
