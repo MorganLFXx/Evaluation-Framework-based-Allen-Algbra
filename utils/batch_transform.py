@@ -1,7 +1,12 @@
 import json
 import os
 
-from generate.generate_response import detail_post_question, allen_helper
+from generate.generate_response import (
+    detail_post_question,
+    allen_helper,
+    post_question_conflict,
+    post_question_fill,
+)
 from utils.format import parse_json_block
 
 model_problem = (
@@ -9,7 +14,7 @@ model_problem = (
 )
 
 
-def item2question(sample):
+def item2single(sample):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     hints = sample["hints"]
@@ -27,14 +32,69 @@ def item2question(sample):
     return messages
 
 
+def item2conflict(sample):
+    question = (
+        "There is a conflict hint in the hints. "
+        "Please help me find out the conflict hint."
+        f"Note: All hints directly describe the relation between 2 events is absolutely correct."
+        f"'Directly describe' means you can directly determine the allen relation between 2 event based on this hint without any other hints. "
+    )
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    question += post_question_conflict + "\n"
+    messages = [
+        {"role": "system", "content": allen_helper},
+        {"role": "user", "content": question},
+    ]
+    return messages
+
+
+def item2fill(sample):
+    l_no, r_no = sample["target"]["blank_object"]
+    event_l, event_r = sample["events"][l_no], sample["events"][r_no]
+    question = (
+        f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
+        f"Based on the existing hints, please try to guess the Allen relation between {event_l} and {event_r}, "
+        f"or attempt to describe the order of the start and end time points of {event_l} and {event_r}."
+    )
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    question += post_question_fill + "\n"
+    messages = [
+        {"role": "system", "content": allen_helper},
+        {"role": "user", "content": question},
+    ]
+    return messages
+
+
+def item2question(sample, chat_type):
+    if chat_type == "single":
+        return item2single(sample)
+    elif chat_type == "conflict":
+        return item2conflict(sample)
+    elif chat_type == "fill":
+        return item2fill(sample)
+    else:
+        raise ValueError(f"Unsupported chat type: {chat_type}")
+
+
 def json_to_jsonl():
     """
     将 JSON 文件转换为 JSONL 文件
     :param json_file_path: 输入的 JSON 文件路径
     :param jsonl_file_path: 输出的 JSONL 文件路径
     """
-    json_file_path = "datasets/test_15.json"
-    jsonl_file_path = f"{json_file_path}l"
+    name = "test_3_fillblank"
+    if name.endswith("conflict"):
+        chat_type = "conflict"
+    elif name.endswith("fillblank"):
+        chat_type = "fill"
+    else:
+        chat_type = "single"
+    json_file_path = f"datasets/{name}.json"
+    jsonl_file_path = f"datasets/jsonl/{name}.jsonl"
     try:
         with open(json_file_path, "r", encoding="utf-8") as f:
             json_data = json.load(f)
@@ -46,7 +106,7 @@ def json_to_jsonl():
         with open(jsonl_file_path, "w", encoding="utf-8") as f:
             i = 0
             for item in json_data:
-                messages = item2question(item)
+                messages = item2question(item, chat_type)
                 transformed_item = {
                     "custom_id": i,
                     "method": "POST",
@@ -68,9 +128,9 @@ def json_to_jsonl():
 
 
 def jsonl_to_json():
-    name = "test_15"
+    name = "test_50_qwenplus"
     with open(
-        f"datasets/answers/{name}_qwenplus_with_answers.jsonl", "r", encoding="utf-8"
+        f"datasets/answers/{name}_with_answers.jsonl", "r", encoding="utf-8"
     ) as f:
         data = [json.loads(line) for line in f]
     with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
@@ -88,21 +148,23 @@ def jsonl_to_json():
                 _item["answer_single"] = []
         else:
             _item["answer_single"] = [answer]
-    with open(
-        f"datasets/answers/{name}_qwenplus_with_answers.json", "w", encoding="utf-8"
-    ) as f:
+    with open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8") as f:
         json.dump(original_data, f, ensure_ascii=False, indent=4)
 
 
 def check_bad_samples():
-    name = "test_15_qwenplus"
+    name = "test_50_qwenplus"
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         answers = json.load(f)
 
     new_data = []
     i = 0
     for item in answers:
-        if "answer_single" not in item or item["answer_single"][0] == model_problem:
+        if (
+            "answer_single" not in item
+            or len(item["answer_single"]) == 0
+            or item["answer_single"][0] == model_problem
+        ):
             item["old_id"] = item["id"]
             item["id"] = i
             i += 1
@@ -114,7 +176,7 @@ def check_bad_samples():
 
 
 def merge_bad_samples():
-    name = "test_15_qwenplus"
+    name = "test_50_qwenplus"
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         answers = json.load(f)
     with open(
@@ -136,10 +198,10 @@ def merge_bad_samples():
 
 
 def main():
-    # json_to_jsonl()
+    json_to_jsonl()
     # jsonl_to_json()
     # check_bad_samples()
-    merge_bad_samples()
+    # merge_bad_samples()
 
 
 if __name__ == "__main__":
