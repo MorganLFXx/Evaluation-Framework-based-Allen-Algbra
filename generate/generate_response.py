@@ -43,31 +43,41 @@ Note:
 2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """
 
+post_question_conflict = """
+Answer the number preceding the hint where you confirmed the existence of conflicts. If there are no conflicts, answer -1.
+Output ONLY JSON with fields: \n
+{
+    "answer_single": "The number preceding the hint where you confirmed the existence of conflicts."
+}
+"""
 
-def multi_chat(sample, model, hint_type):
-    l = sample["target"]["l"]
-    r = sample["target"]["r"]
-    answers = []
-    question = (
-        f"Please help me determine the allen relationship between '\n"
-        f"{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following hints."
-    )
-    hints = sample["hints"]
-    messages = [
-        {"role": "system", "content": allen_helper},
-    ]
-    question += post_question + "\n"
-    for i in range(len(hints)):
-        if i == 0:
-            messages.append({"role": "user", "content": question + hints[i]})
-        else:
-            messages.append({"role": "user", "content": hints[i]})
-        result = call_api(messages, model)
-        # print(result)
-        messages.append({"role": "assistant", "content": result})
-        answers.append(result)
-        sleep(1)
-    return answers
+detail_post_question_conflict = """
+You should provide your thoughtfully considered thinking process.
+Output ONLY JSON with fields: \n
+{
+    "thinking": "Summary of your thoughtfully considered thinking process",
+    "answer_single": "The number preceding the hint where you confirmed the existence of conflicts."
+}
+"""
+
+post_question_fill = """
+Note: There are multiple possibilities for the missing hint; please provide only the most likely one.
+Output ONLY JSON with fields: \n
+{
+    "answer_single": "The missing hint that describes the Allen relation between the two events, or the order of the start and end time points of the two events."
+}
+"""
+
+detail_post_question_fill = """
+You should provide summary of your thoughtfully considered thinking process.
+Note: There are multiple possibilities for the missing hint; please provide only the most likely one.
+Output ONLY JSON with fields: \n
+{
+    "thinking": "Summary of your thoughtfully considered thinking process",
+    "answer_single": "The missing hint that describes the Allen relation between the two events, or the order of the start and end time points of the two events."
+}
+"""
+
 
 
 def single_chat(sample, model, hint_type):
@@ -78,7 +88,6 @@ def single_chat(sample, model, hint_type):
     question = (
         "Please help me determine the allen relationship between "
         f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information."
-        # f"'{sample['events'][l]}{l}' and '{sample['events'][r]}{r}' based on following information."
     )
     # question += post_question + "\n"
     question += detail_post_question + "\n"
@@ -102,12 +111,71 @@ def single_chat(sample, model, hint_type):
     return answers
 
 
+def conflict_chat(sample, model):
+    question = (
+        "There is a conflict hint in the hints. "
+        "Please help me find out the conflict hint."
+        f"Note: All hints directly describe the relation between 2 events is absolutely correct."
+        f"'Directly describe' means you can directly determine the allen relation between 2 event based on this hint without any other hints. "
+    )
+    answers = []
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    # question += detail_post_question_conflict + "\n"
+    question += post_question_conflict + "\n"
+    messages = [
+        {"role": "system", "content": allen_helper},
+        {"role": "user", "content": question},
+    ]
+
+    try:
+        result = call_thinking_api(messages, model)
+    except Exception as e:
+        result = f"API调用失败{str(e)}"
+    # print(result)
+    answers.append(result)
+    sleep(1)
+    return answers
+
+
+def fill_chat(sample, model):
+    answers = []
+    l_no, r_no = sample["target"]["blank_object"]
+    event_l, event_r = sample["events"][l_no], sample["events"][r_no]
+    question = (
+        f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
+        f"Based on the existing hints, please try to guess the Allen relation between {event_l} and {event_r}, "
+        f"or attempt to describe the order of the start and end time points of {event_l} and {event_r}."
+    )
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    # question += detail_post_question_fill + "\n"
+    question += post_question_fill + "\n"
+    messages = [
+        {"role": "system", "content": allen_helper},
+        {"role": "user", "content": question},
+    ]
+
+    try:
+        result = call_thinking_api(messages, model)
+    except Exception as e:
+        result = f"API调用失败{str(e)}"
+    # print(result)
+    answers.append(result)
+    sleep(1)
+    return answers
+
+
 def process_sample(index, sample, chat_type, model, hint):
     print(f"== 正在处理第 {index + 1} 个用例 ==")
-    if chat_type == "multi":
-        return multi_chat(sample, model, hint)
     if chat_type == "single":
         return single_chat(sample, model, hint)
+    if chat_type == "conflict":
+        return conflict_chat(sample, model)
+    if chat_type == "fill":
+        return fill_chat(sample, model)
     raise ValueError(f"Unsupported chat_type: {chat_type}")
 
 
@@ -196,8 +264,8 @@ def _recover_answers_from_temp(
 def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
     if not name:
         raise ValueError("name is required")
-    if chat_type not in {"single", "multi"}:
-        raise ValueError("chat_type must be 'single' or 'multi'")
+    if chat_type not in {"single", "conflict", "fill"}:
+        raise ValueError("chat_type must be 'single', 'conflict' or 'fill'")
     if hint not in {"hint", "story"}:
         raise ValueError("hint must be 'hint' or 'story'")
 
@@ -257,25 +325,52 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
             try:
                 answers = process_sample(index, samples[index], chat_type, model, hint)
                 with progress_lock:
-                    if isinstance(answers, str):
-                        samples[index][answer_key] = [answers]
-                    elif isinstance(answers, list) and hasattr(answers[0], "content"):
-                        answer = answers[0].content
-                        if "thinking" in answer:
-                            answer = parse_json_block(answer)
-                            if "answer_single" in answer:
-                                samples[index][answer_key] = [
-                                    answer.get("answer_single", "")
-                                ]
+                    if chat_type == "single":
+                        if isinstance(answers, str):
+                            samples[index][answer_key] = [answers]
+                        elif isinstance(answers, list) and hasattr(
+                            answers[0], "content"
+                        ):
+                            answer = answers[0].content
+                            if "thinking" in answer:
+                                answer = parse_json_block(answer)
+                                if "answer_single" in answer:
+                                    samples[index][answer_key] = [
+                                        answer.get("answer_single", "")
+                                    ]
+                                else:
+                                    samples[index][answer_key] = ["I can not determine"]
+                                samples[index]["thinking"] = answer.get("thinking", "")
                             else:
-                                samples[index][answer_key] = ["I can not determine"]
-                            samples[index]["thinking"] = answer.get("thinking", "")
+                                samples[index][answer_key] = [answer]
                         else:
-                            samples[index][answer_key] = [answer]
-                    else:
-                        print(
-                            f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
-                        )
+                            print(
+                                f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
+                            )
+                    elif chat_type in ["conflict", "fill"]:
+                        if isinstance(answers, str):
+                            # print("is str")
+                            samples[index][answer_key] = answers
+                        elif isinstance(answers, list) and hasattr(
+                            answers[0], "content"
+                        ):
+                            # print("has content")
+                            answer = answers[0].content
+                            answer = parse_json_block(answer)
+                            # print(f"answer:{answer}")
+                            if answer is not None and "answer_single" in answer:
+                                samples[index][answer_key] = answer.get(
+                                    "answer_single", ""
+                                )
+                            else:
+                                samples[index][answer_key] = "There is something error"
+                        else:
+                            print(
+                                f"answer is {isinstance(answers, list)}, has content: {hasattr(answers[0], 'content') if isinstance(answers, list) else 'N/A'}"
+                            )
+                            print(
+                                f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
+                            )
                     # if "reasoning_content" in answer:
                     #     samples[index]["reasoning_content"] = answers[
                     #         0
