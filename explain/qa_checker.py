@@ -1,115 +1,65 @@
 import json
 import argparse
-import csv
+from sentence_transformers import SentenceTransformer, util
+
+_SIM_MODEL = None
+_SIM_UTIL = None
+FILL_SIM_THRESHOLD = 0.7
 
 
-def sample_check(sample):
+def _get_sim_model():
+    global _SIM_MODEL, _SIM_UTIL
+    if _SIM_MODEL is None:
+        _SIM_MODEL = SentenceTransformer(
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        )
+        _SIM_UTIL = util
+    return _SIM_MODEL, _SIM_UTIL
+
+
+def semantic_similarity(text1: str, text2: str) -> float:
+    text1 = str(text1).strip()
+    text2 = str(text2).strip()
+    if not text1 or not text2:
+        return 0.0
+    model, sim_util = _get_sim_model()
+    emb1 = model.encode(text1, convert_to_tensor=True)
+    emb2 = model.encode(text2, convert_to_tensor=True)
+    return float(sim_util.cos_sim(emb1, emb2).item())
+
+
+def single_check(sample):
     if sample["answer_single"][0].strip().startswith("<think>"):
         return False
     return sample["answer_single"][0].strip() == sample["target"]["rel"]
 
 
-def model_error_overlap_check():
-    """
-    比较不同模型在相同数据集上的错误重叠度。
-    1) 输入多个文件名（不含 _with_answers.json）
-    2) 样例仅包含 target 和 answer
-    3) 不同文件中相同 id 表示同一问题
-    """
-    parser = argparse.ArgumentParser(
-        description="Check overlap of model errors on the same dataset"
+def conflict_check(sample):
+    # judge answer_single is a int
+    if not sample["answer_single"][0].strip().isdigit():
+        return False
+    return sample["answer_single"][0].strip() == sample["target"]["conflict_no"]
+
+
+def fill_check(sample):
+    candidates = list(sample["target"]["blank_candidate"])
+    answer = sample["answer_single"][0].strip()
+    model, sim_util = _get_sim_model()
+    answer_emb = model.encode(answer, convert_to_tensor=True)
+    candidate_embs = model.encode(
+        [str(c).strip() for c in candidates], convert_to_tensor=True
     )
-    parser.add_argument(
-        "--names",
-        nargs="+",
-        required=True,
-        help="待校验的数据集文件名（不含 _with_answers.json）",
-    )
-    parser.add_argument(
-        "--show",
-        type=int,
-        default=5,
-        help="每组重合样例最多展示的数量",
-    )
-    args = parser.parse_args()
+    max_sim = float(sim_util.cos_sim(answer_emb, candidate_embs).max().item())
+    return max_sim >= FILL_SIM_THRESHOLD
 
-    def normalize_answer_tokens(answer):
-        if answer is None:
-            return []
-        text = str(answer).strip()
-        if not text or text.startswith("<think>"):
-            return []
-        text = text.replace(",", " ")
-        tokens = [t.strip() for t in text.split() if t.strip()]
-        return tokens
 
-    def answer_display(tokens):
-        if not tokens:
-            return "None"
-        if len(tokens) == 1:
-            return tokens[0]
-        return ",".join(tokens)
-
-    error_sets = {}
-    error_details = {}
-
-    for name in args.names:
-        with open(
-            f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8"
-        ) as f:
-            data = json.load(f)
-
-        current_errors = {}
-        for idx, item in enumerate(data):
-            target = item.get("target", {}).get("rel")
-            raw_answer = None
-            if "answer_single" in item and item["answer_single"]:
-                raw_answer = item["answer_single"][0]
-
-            tokens = normalize_answer_tokens(raw_answer)
-            is_correct = len(tokens) == 1 and tokens[0] == target
-            if not is_correct:
-                sample_id = item.get("id", idx)
-                current_errors[sample_id] = {
-                    "id": sample_id,
-                    "target": target,
-                    "answer": answer_display(tokens),
-                }
-
-        error_sets[name] = set(current_errors.keys())
-        error_details[name] = current_errors
-        print(f"{name}: errors {len(current_errors)}/{len(data)}")
-
-    names = list(error_sets.keys())
-    if len(names) < 2:
-        print("需要至少两个数据集才能计算重合情况。")
-        return
-
-    print("\nPairwise overlap:")
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            left, right = names[i], names[j]
-            overlap = error_sets[left] & error_sets[right]
-            print(f"{left} & {right}: {len(overlap)}")
-            if args.show > 0 and overlap:
-                for sample_id in list(overlap)[: args.show]:
-                    info = error_details[left].get(sample_id) or error_details[
-                        right
-                    ].get(sample_id)
-                    print(
-                        f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-                    )
-
-    common = set.intersection(*(error_sets[name] for name in names))
-    print(f"\nCommon overlap (all models): {len(common)}")
-    if args.show > 0 and common:
-        for sample_id in list(common)[: args.show]:
-            info = error_details[names[0]].get(sample_id)
-            if info is None:
-                continue
-            print(
-                f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-            )
+def sample_check(sample):
+    if "conflict_no" in sample["target"]:
+        return conflict_check(sample)
+    elif "blank_object" in sample["target"]:
+        return fill_check(sample)
+    else:
+        return single_check(sample)
 
 
 def overlap_check():
@@ -226,6 +176,11 @@ def overlap_check():
             )
 
 
+model_problem = (
+    "I can not determine.(The model may be overthinking or the output is truncated.)"
+)
+
+
 def answer_verify(name):
     if not name:
         raise ValueError("name is required")
@@ -237,7 +192,11 @@ def answer_verify(name):
     right = 0
     skip = 0
     for item in data:
-        if "answer_single" not in item:
+        if (
+            "answer_single" not in item
+            or len(item["answer_single"]) == 0
+            or item["answer_single"][0] == model_problem
+        ):
             skip += 1
             continue
         item["right"] = sample_check(item)
@@ -251,7 +210,9 @@ def answer_verify(name):
             indent=4,
         )
     # print(f"Get response error: {skip}")
-    print(f"Skip: {skip}, Accuracy: {right}/{len(data)-skip} = {right/(len(data)-skip):.4f}")
+    print(
+        f"Skip: {skip}, Accuracy: {right}/{len(data)-skip} = {right/(len(data)-skip):.4f}"
+    )
     return right
 
 
@@ -315,17 +276,15 @@ def link_count():
 def main(mode="answer_verify", name=None, names=None, show=5):
     if mode == "answer_verify":
         answer_verify(name)
-    # elif mode == "overlap_check":
-    #     overlap_check(names, show)
-    # elif mode == "model_error_overlap_check":
-    #     model_error_overlap_check(names, show)
     else:
         raise ValueError(f"Unsupported mode: {mode}")
-    # link_count()
-    # count()
-    # model_error_overlap_check()
-    # overlap_check()
 
 
 if __name__ == "__main__":
     main(mode="answer_verify", name="sample")
+    # print(
+    #     semantic_similarity(
+    #         "L0 is preceded by H2",
+    #         "'H2' precedes 'L0' or Start('H2') < End('H2') < Start('L0') < End('L0').",
+    #     )
+    # )
