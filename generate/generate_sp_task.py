@@ -1,9 +1,7 @@
 import json
 import random
 import copy
-from turtle import right
 
-from ray import get
 from generate.hint import judge_relation_hint, convert_anti_hint, get_rels_explanations
 from generate.generate_hints import get_relation_hint, generate_hint
 from utils.relation import get_left_node, get_right_node
@@ -71,8 +69,9 @@ def generate_fill(sample):
             )["hint"]
             new_hints.append(target_hint)
         else:
-            p_hints = generate_hint(p, new_sample["events"], "indirect pos")["hint"]
-            new_hints.extend(p_hints["hint"])
+            p_hints = generate_hint(p, new_sample["events"], "indirect pos")
+            hint_texts = [h["hint"] for h in p_hints]
+            new_hints.extend(hint_texts)
 
     del new_sample["explanation"]  # no need
     new_sample["hints"] = new_hints
@@ -105,7 +104,9 @@ def generate_conflict(sample):
     conflict_hint = convert_anti_hint(original_hint)
 
     hints[conflict_id] = conflict_hint
-    new_sample["target"]["conflict_no"] = conflict_id
+    new_sample["target"]["conflict_no"] = (
+        conflict_id + 1
+    )  # 对应回答时的提示编号，从1开始
     new_sample["target"]["original_hint"] = original_hint
 
     target = new_sample.get("target", {})
@@ -123,15 +124,16 @@ def generate_fillblank_task():
     2. For each sample, generate a fill-in-the-blank question
     3. Save the new dataset
     """
-    with open("datasets/debug_bases_1.json", "r", encoding="utf-8") as f:
+    name = "test_3"
+    with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     output = [generate_fill(sample) for sample in data]
 
-    with open("datasets/debug_fillblank_1.json", "w", encoding="utf-8") as f:
+    with open(f"datasets/{name}_fillblank.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4, ensure_ascii=False)
     print(
-        "Fill-in-the-blank task generated and saved to datasets/debug_fillblank_1.json"
+        f"Fill-in-the-blank task generated and saved to datasets/{name}_fillblank.json"
     )
 
 
@@ -141,14 +143,15 @@ def generate_conflict_task():
     2. For each sample, generate a conflict-detect question
     3. Save the new dataset
     """
-    with open("datasets/debug_bases_1.json", "r", encoding="utf-8") as f:
+    name = "test_3"
+    with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     output = [generate_conflict(sample) for sample in data]
 
-    with open("datasets/debug_conflict_1.json", "w", encoding="utf-8") as f:
+    with open(f"datasets/{name}_conflict.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4, ensure_ascii=False)
-    print("Conflict-detect task generated and saved to datasets/debug_conflict_1.json")
+    print(f"Conflict-detect task generated and saved to datasets/{name}_conflict.json")
 
 
 def main():
