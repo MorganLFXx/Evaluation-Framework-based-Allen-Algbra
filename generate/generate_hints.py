@@ -17,7 +17,7 @@ def get_negation(rel: str, l_no: int, r_no: int, events: list) -> list:
     ]
 
 
-def get_easy_hint(rel: str, l_no: int, r_no: int, events: list) -> list:
+def get_relation_hint(rel: str, l_no: int, r_no: int, events: list) -> list:
     """Generate hints based on relation and event numbers"""
     event_l = events[l_no]
     event_r = events[r_no]
@@ -118,13 +118,13 @@ def generate_hint(path, events, hint_type):
     # composition
     if path["left"] == -1:
         hints.append(
-            get_easy_hint(
+            get_relation_hint(
                 path["path"][0], path["base_event"][0], path["new_event"], events
             )
         )
     if path["right"] == -1:
         hints.append(
-            get_easy_hint(
+            get_relation_hint(
                 path["path"][1], path["new_event"], path["base_event"][1], events
             )
         )
@@ -140,7 +140,7 @@ def generate_hint(path, events, hint_type):
 
 
 # "direct neg", "indirect neg", "indirect pos"
-def generate_hints(paths, events, hint_type="direct neg"):
+def generate_hints(paths, events, hint_type="indirect pos"):
     hints = []
     for p in paths:
         p_hints = generate_hint(p, events, hint_type)
