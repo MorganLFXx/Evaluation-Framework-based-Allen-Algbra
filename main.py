@@ -45,7 +45,6 @@ def response_controller(argv=None):
         "--chat_type",
         type=str,
         choices=["single", "conflict", "fill"],
-        required=True,
         help="问题类型",
         default="single",
     )
@@ -156,7 +155,6 @@ def main():
         "--chat_type",
         type=str,
         choices=["single", "conflict", "fill"],
-        required=True,
         help="问题类型",
     )
     response_parser.add_argument(
@@ -241,7 +239,6 @@ def main():
         "--chat_type",
         type=str,
         choices=["single", "conflict", "fill"],
-        required=True,
         help="问题类型",
         default="single",
     )
