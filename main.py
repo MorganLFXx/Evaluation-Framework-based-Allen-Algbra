@@ -6,6 +6,8 @@ the parse_args should be parsed here
 import argparse
 import os
 
+from transformers import pipeline
+
 from generate import generate_data
 from generate import generate_response
 from explain import qa_checker
@@ -42,9 +44,10 @@ def response_controller(argv=None):
     parser.add_argument(
         "--chat_type",
         type=str,
-        choices=["single", "multi"],
+        choices=["single", "conflict", "fill"],
         required=True,
-        help="chat类型(single/multi)",
+        help="问题类型",
+        default="single",
     )
     parser.add_argument(
         "--workers",
@@ -149,13 +152,13 @@ def main():
     response_parser.add_argument(
         "--name", type=str, required=True, help="需要生成答案的文件名"
     )
-    # response_parser.add_argument(
-    #     "--chat_type",
-    #     type=str,
-    #     choices=["single", "multi"],
-    #     required=True,
-    #     help="chat类型(single/multi)",
-    # )
+    response_parser.add_argument(
+        "--chat_type",
+        type=str,
+        choices=["single", "conflict", "fill"],
+        required=True,
+        help="问题类型",
+    )
     response_parser.add_argument(
         "--workers",
         type=int,
@@ -235,6 +238,14 @@ def main():
         help="Number of parallel workers for response generation",
     )
     pipeline_parser.add_argument(
+        "--chat_type",
+        type=str,
+        choices=["single", "conflict", "fill"],
+        required=True,
+        help="问题类型",
+        default="single",
+    )
+    pipeline_parser.add_argument(
         "--model",
         type=str,
         default="deepseek-v3.2",
@@ -264,8 +275,7 @@ def main():
     elif args.command == "response":
         generate_response.main(
             name=args.name,
-            # chat_type=args.chat_type,
-            chat_type="single",
+            chat_type=args.chat_type,
             model=args.model,
             workers=args.workers,
             merge_only=args.merge_only,
@@ -295,7 +305,7 @@ def main():
         # 2. 回答生成
         generate_response.main(
             name=args.name,
-            chat_type="single",
+            chat_type=args.chat_type,
             model=args.model,
             workers=args.workers,
             merge_only=False,
