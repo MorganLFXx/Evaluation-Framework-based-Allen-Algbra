@@ -1,9 +1,14 @@
 import json
 import random
 import copy
+from turtle import left
 
 from generate.hint import judge_relation_hint, convert_anti_hint, get_rels_explanations
-from generate.generate_hints import get_relation_hint, generate_hint
+from generate.generate_hints import (
+    get_relation_hint,
+    generate_hint,
+    generate_exclude_hint,
+)
 from utils.relation import get_left_node, get_right_node
 
 
@@ -30,7 +35,7 @@ def generate_fill(sample):
     path_no = random.choice(candidate_path_no)
     deleted_path = sample["paths"][path_no]
     for p in new_sample["paths"]:
-        if p == sample["paths"][path_no]:
+        if p == deleted_path:
             target = deleted_path["target"]
             base_left, base_right = deleted_path["base_event"]
             new_event = deleted_path["new_event"]
@@ -84,30 +89,68 @@ def generate_conflict(sample):
     Given: 1. Original hints with one hint replaced 2. Target relation
     Replaced hint: Convert to antisense hint
     Need: convert_anti_hint()
-    Step: 1. Randomly select a hint to replace 2. Replace it with its antisense form 3. Save the replaced hint as 'conflict_hint' and 'conflict num' 4. Add a new hint 'target_hint' to the hints list
+    Step: 1. Choose a leaf-parent hint to replace 2. Replace it with its antisense form 3. Save the replaced hint as 'conflict_hint' and 'conflict num' 4. Add a new hint 'target_hint' to the hints list
     """
     new_sample = copy.deepcopy(sample)
     del new_sample["explanation"]  # no need
-    hints = new_sample.get("hints", [])
+    hints = []
 
-    candidate_ids = []
-    for i in range(len(hints)):
-        if not judge_relation_hint(hints[i]):
-            candidate_ids.append(i)
-
-    if not candidate_ids:
-        # If there are no non-relation hints, we cannot create a conflict. Return the original sample.
+    # find candidate paths
+    candidate_path_no = []
+    for i in range(len(sample["paths"])):
+        path = sample["paths"][i]
+        if path["left"] == -1 and path["right"] == -1:  # confirm conflict
+            candidate_path_no.append(i)
+    if not candidate_path_no:
+        print(new_sample["id"], "no candidate path for conflict generation")
         new_sample["target"]["conflict_no"] = -1
         return new_sample
-    conflict_id = random.choice(candidate_ids)
-    original_hint = hints[conflict_id]
-    conflict_hint = convert_anti_hint(original_hint)
+    path_no = random.choice(candidate_path_no)
+    replaced_path = sample["paths"][path_no]
 
-    hints[conflict_id] = conflict_hint
-    new_sample["target"]["conflict_no"] = (
-        conflict_id + 1
-    )  # 对应回答时的提示编号，从1开始
-    new_sample["target"]["original_hint"] = original_hint
+    for p in new_sample["paths"]:
+        if p == replaced_path:
+            left_hint = get_relation_hint(
+                p["path"][0], p["base_event"][0], p["new_event"], new_sample["events"]
+            )
+            right_hint = get_relation_hint(
+                p["path"][1], p["new_event"], p["base_event"][1], new_sample["events"]
+            )
+            candidate_targets = replaced_path["excluded"]
+            candidate_targets.append(replaced_path["target"])
+            conflict_hint = generate_exclude_hint(
+                candidate_targets,
+                p["base_event"][0],
+                p["base_event"][1],
+                new_sample["events"],
+            )["hint"]
+            hints.append(left_hint["hint"])
+            hints.append(right_hint["hint"])
+            hints.append(conflict_hint)
+            # 对应回答时的提示编号，从1开始
+            new_sample["target"]["conflict_no"] = len(hints)
+        else:
+            p_hints = generate_hint(p, new_sample["events"], "indirect pos")
+            hint_texts = [h["hint"] for h in p_hints]
+            hints.extend(hint_texts)
+    # candidate_ids = []
+    # for i in range(len(hints)):
+    #     if not judge_relation_hint(hints[i]):
+    #         candidate_ids.append(i)
+
+    # if not candidate_ids:
+    #     # If there are no non-relation hints, we cannot create a conflict. Return the original sample.
+    #     new_sample["target"]["conflict_no"] = -1
+    #     return new_sample
+    # conflict_id = random.choice(candidate_ids)
+    # original_hint = hints[conflict_id]
+    # conflict_hint = convert_anti_hint(original_hint)
+
+    # hints[conflict_id] = conflict_hint
+    # new_sample["target"]["conflict_no"] = (
+    #     conflict_id + 1
+    # )  # 对应回答时的提示编号，从1开始
+    # new_sample["target"]["original_hint"] = original_hint
 
     target = new_sample.get("target", {})
     target_rel = target.get("rel")
@@ -149,13 +192,15 @@ def generate_conflict_task():
 
     output = [generate_conflict(sample) for sample in data]
 
-    with open(f"datasets/{name}_conflict.json", "w", encoding="utf-8") as f:
+    with open(f"datasets/{name}_new_conflict.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4, ensure_ascii=False)
-    print(f"Conflict-detect task generated and saved to datasets/{name}_conflict.json")
+    print(
+        f"Conflict-detect task generated and saved to datasets/{name}_new_conflict.json"
+    )
 
 
 def main():
-    generate_fillblank_task()
+    # generate_fillblank_task()
     generate_conflict_task()
 
 

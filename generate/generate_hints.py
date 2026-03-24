@@ -113,6 +113,34 @@ def generate_indirect_evidence(path, events):
     return hints
 
 
+def generate_exclude_hint(excludes, l_no, r_no, events):
+    """
+    Args:
+    - excludes: list of relations to exclude
+    - l_no: left event number
+    - r_no: right event number
+    - events: list of event descriptions
+    Return: a hint indicates relationships other than those to be excluded
+    """
+    candidate_funcs = []
+    for attr, value_to_func in hint.ATTRIBUTE_HINT.items():
+        excluded_values = {hint.RELATION_DEFINITIONS[rel][attr] for rel in excludes}
+        for value, attr_func in value_to_func.items():
+            if value not in excluded_values:
+                candidate_funcs.append(attr_func)
+
+    if not candidate_funcs:
+        return None
+    hint_info = random.choice(candidate_funcs)()
+
+    return {
+        "hint": hint_info["hint"].format(event_l=events[l_no], event_r=events[r_no]),
+        "explanation": hint_info["explanation"].format(
+            event_l=events[l_no], event_r=events[r_no]
+        ),
+    }
+
+
 def generate_hint(path, events, hint_type):
     hints = []
     # composition
