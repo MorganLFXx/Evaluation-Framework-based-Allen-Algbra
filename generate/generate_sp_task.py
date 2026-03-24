@@ -1,7 +1,7 @@
 import json
 import random
 import copy
-from turtle import left
+import argparse
 
 from generate.hint import judge_relation_hint, convert_anti_hint, get_rels_explanations
 from generate.generate_hints import (
@@ -161,13 +161,12 @@ def generate_conflict(sample):
     return new_sample
 
 
-def generate_fillblank_task():
+def generate_fillblank_task(name):
     """
     1. Load an existing dataset
     2. For each sample, generate a fill-in-the-blank question
     3. Save the new dataset
     """
-    name = "test_3"
     with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -180,28 +179,43 @@ def generate_fillblank_task():
     )
 
 
-def generate_conflict_task():
+def generate_conflict_task(name):
     """
     1. Load an existing dataset
     2. For each sample, generate a conflict-detect question
     3. Save the new dataset
     """
-    name = "test_3"
     with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
     output = [generate_conflict(sample) for sample in data]
 
-    with open(f"datasets/{name}_new_conflict.json", "w", encoding="utf-8") as f:
+    with open(f"datasets/{name}_conflict.json", "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4, ensure_ascii=False)
-    print(
-        f"Conflict-detect task generated and saved to datasets/{name}_new_conflict.json"
-    )
+    print(f"Conflict-detect task generated and saved to datasets/{name}_conflict.json")
 
 
 def main():
-    # generate_fillblank_task()
-    generate_conflict_task()
+    parser = argparse.ArgumentParser(description="Generate special tasks from dataset")
+    parser.add_argument(
+        "--name",
+        type=str,
+        required=True,
+        help="基础数据集文件名（不含 .json）",
+    )
+    parser.add_argument(
+        "--type",
+        type=str,
+        choices=["conflict", "fill"],
+        required=True,
+        help="任务类型：conflict/fill",
+    )
+    args = parser.parse_args()
+
+    if args.type == "conflict":
+        generate_conflict_task(args.name)
+    elif args.type == "fill":
+        generate_fillblank_task(args.name)
 
 
 if __name__ == "__main__":
