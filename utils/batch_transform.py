@@ -128,7 +128,7 @@ def json_to_jsonl():
 
 
 def jsonl_to_json():
-    name = "test_50_qwenplus"
+    name = "test_3_fillblank"
     with open(
         f"datasets/answers/{name}_with_answers.jsonl", "r", encoding="utf-8"
     ) as f:
@@ -147,6 +147,8 @@ def jsonl_to_json():
             else:
                 _item["answer_single"] = []
         else:
+            answer = parse_json_block(response)
+            answer = response if answer is None else answer.get("answer_single", "")
             _item["answer_single"] = [answer]
     with open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8") as f:
         json.dump(original_data, f, ensure_ascii=False, indent=4)
@@ -198,8 +200,8 @@ def merge_bad_samples():
 
 
 def main():
-    json_to_jsonl()
-    # jsonl_to_json()
+    # json_to_jsonl()
+    jsonl_to_json()
     # check_bad_samples()
     # merge_bad_samples()
 
