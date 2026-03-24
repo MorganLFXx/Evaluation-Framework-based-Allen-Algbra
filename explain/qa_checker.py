@@ -1,31 +1,8 @@
 import json
 import argparse
-from sentence_transformers import SentenceTransformer, util
+import re
 
-_SIM_MODEL = None
-_SIM_UTIL = None
-FILL_SIM_THRESHOLD = 0.7
-
-
-def _get_sim_model():
-    global _SIM_MODEL, _SIM_UTIL
-    if _SIM_MODEL is None:
-        _SIM_MODEL = SentenceTransformer(
-            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-        )
-        _SIM_UTIL = util
-    return _SIM_MODEL, _SIM_UTIL
-
-
-def semantic_similarity(text1: str, text2: str) -> float:
-    text1 = str(text1).strip()
-    text2 = str(text2).strip()
-    if not text1 or not text2:
-        return 0.0
-    model, sim_util = _get_sim_model()
-    emb1 = model.encode(text1, convert_to_tensor=True)
-    emb2 = model.encode(text2, convert_to_tensor=True)
-    return float(sim_util.cos_sim(emb1, emb2).item())
+from utils.chat import call_api
 
 
 def single_check(sample):
@@ -37,20 +14,42 @@ def single_check(sample):
 def conflict_check(sample):
     # judge answer_single is a int
     if not sample["answer_single"][0].strip().isdigit():
+        print("not digit")
         return False
-    return sample["answer_single"][0].strip() == sample["target"]["conflict_no"]
+    answer = int(sample["answer_single"].strip())
+    return answer == sample["target"]["conflict_no"]
 
 
 def fill_check(sample):
     candidates = list(sample["target"]["blank_candidate"])
     answer = sample["answer_single"][0].strip()
-    model, sim_util = _get_sim_model()
-    answer_emb = model.encode(answer, convert_to_tensor=True)
-    candidate_embs = model.encode(
-        [str(c).strip() for c in candidates], convert_to_tensor=True
+    if not answer or answer.startswith("<think>"):
+        return False
+
+    normalized_candidates = [str(c).strip() for c in candidates if str(c).strip()]
+
+    prompt = (
+        "You are a strict answer checker.\n"
+        "Task: determine whether ANSWER matches any one of CANDIDATES in meaning.\n"
+        "Return ONLY one word: true or false (lowercase).\n"
+        "Do not output anything else.\n\n"
+        f"ANSWER:\n{answer}\n\n"
+        "CANDIDATES:\n" + "\n".join([f"- {c}" for c in normalized_candidates])
     )
-    max_sim = float(sim_util.cos_sim(answer_emb, candidate_embs).max().item())
-    return max_sim >= FILL_SIM_THRESHOLD
+
+    try:
+        raw = call_api([{"role": "user", "content": prompt}], "qwen3.5-flash")
+    except Exception as exc:
+        print(f"fill_check api error: {exc}")
+        return False
+
+    text = str(raw).strip().lower()
+    if text in {"true", "false"}:
+        result = text == "true"
+    else:
+        match = re.search(r"\b(true|false)\b", text)
+        result = bool(match and match.group(1) == "true")
+    return result
 
 
 def sample_check(sample):
@@ -281,10 +280,17 @@ def main(mode="answer_verify", name=None, names=None, show=5):
 
 
 if __name__ == "__main__":
-    main(mode="answer_verify", name="sample")
-    # print(
-    #     semantic_similarity(
-    #         "L0 is preceded by H2",
-    #         "'H2' precedes 'L0' or Start('H2') < End('H2') < Start('L0') < End('L0').",
-    #     )
-    # )
+    # main(mode="answer_verify", name="sample")
+    candidates = [
+        "'O2' overlaps 'I3' or Start('O2') < Start('I3') < End('O2') < End('I3').",
+        "'O2' is finished by 'I3' or Start('O2') < Start('I3') < End('O2') = End('I3').",
+        "'O2' contains 'I3' or Start('O2') < Start('I3') < End('I3') < End('O2').",
+        "'O2' starts 'I3' or Start('O2') = Start('I3') < End('O2') < End('I3').",
+        "'O2' equals 'I3' or Start('O2') = Start('I3') < End('O2') = End('I3').",
+        "'O2' is started by 'I3' or Start('O2') = Start(''I3') < End('I3') < End('O2').",
+        "'O2' during 'I3' or Start('I3') < Start(''O2') < End('O2') < End('I3').",
+        "'O2' finishes 'I3' or Start('I3') < Start('O2') < End('O2') = End('I3').",
+        "'I3' overlaps 'O2' or Start('I3') < Start('O2') < End('I3') < End('O2').",
+    ]
+    for c in candidates:
+        pass

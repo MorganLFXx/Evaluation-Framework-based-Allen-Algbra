@@ -25,7 +25,11 @@ opensource_model = local_model + ["qwen3.5-122b-a10b", "qwen3.5-397b-a17b"]
 
 class ResponseModel(BaseModel):
     thinking: str = Field(
-        description="Summary of your thoughtfully considered thinking process(Use the '1. Hint Interpretion Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format)",
+        description=(
+            "Summary of your thoughtfully considered thinking process"
+            "Note: 1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. In hint interpretation phase, you should interpret basic meaning of all hints one by one. In reasoning phase, you should provide thinking process bases on the interpreted hints. "
+            "2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.",
+        )
     )
     answer_single: str = Field(
         description="The abbreviation of the final answer.If you still have multiple answers and cannot decide, answer all of them."
@@ -73,6 +77,30 @@ def call_deepseek_api(messages, call_model) -> str:
     except Exception as e:
         raise Exception(f"API调用失败: {str(e)}")
 
+    return response.choices[0].message
+
+
+def call_fast_tongyi_api(messages, call_model):
+    client = OpenAI(
+        api_key=tongyi_apikey,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=call_model,
+            messages=messages,
+            temperature=0,
+            max_tokens=20000,
+            stream=False,
+            timeout=60,
+            extra_body={"enable_thinking": False},
+        )
+        # print(response.choices[0])
+        # print(response.usage.total_tokens)
+    except Exception as e:
+        print(f"API调用失败: {str(e)}")
+        raise Exception(f"API调用失败: {str(e)}")
     return response.choices[0].message
 
 
@@ -139,8 +167,9 @@ def call_local_api(messages, call_model) -> dict:
 
 
 def call_api(messages, call_model) -> str:
-    return call_tongyi_api(messages, call_model).content
+    # return call_tongyi_api(messages, call_model).content
     # return call_local_api(messages, call_model).content
+    return call_fast_tongyi_api(messages, call_model).content
 
 
 def call_thinking_api(messages, call_model) -> dict:
