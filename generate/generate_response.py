@@ -64,7 +64,7 @@ post_question_fill = """
 Note: There are multiple possibilities for the missing hint; please provide only the most likely one.
 Output ONLY JSON with fields: \n
 {
-    "answer_single": "The missing hint that describes the Allen relation between the two events, or the order of the start and end time points of the two events."
+    "answer_single": "The Allen relation between the two events in the missing hint, or the order of the start and end time points of the two events."
 }
 """
 
@@ -77,7 +77,6 @@ Output ONLY JSON with fields: \n
     "answer_single": "The missing hint that describes the Allen relation between the two events, or the order of the start and end time points of the two events."
 }
 """
-
 
 
 def single_chat(sample, model, hint_type):
@@ -116,7 +115,7 @@ def conflict_chat(sample, model):
         "There is a conflict hint in the hints. "
         "Please help me find out the conflict hint."
         f"Note: All hints directly describe the relation between 2 events is absolutely correct."
-        f"'Directly describe' means you can directly determine the allen relation between 2 event based on this hint without any other hints. "
+        f"'Directly describe' means you can directly determine the allen relation(Or complete the sorting of four time points including the start and end times of two events) between 2 event based on this hint without any other hints. "
     )
     answers = []
     hints = sample["hints"]
@@ -270,7 +269,7 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
         raise ValueError("hint must be 'hint' or 'story'")
 
     samples = json.load(open(f"datasets/{name}.json", "r"))
-    answer_key = f"answer_{chat_type}"
+    answer_key = f"answer_single"
     temp_dir = f"datasets/temp/{name}_{model}"
     _ensure_dir(temp_dir)
 
