@@ -358,15 +358,14 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
                             answer = parse_json_block(answer)
                             # print(f"answer:{answer}")
                             if answer is not None and "answer_single" in answer:
-                                samples[index][answer_key] = answer.get(
-                                    "answer_single", ""
-                                )
+                                samples[index][answer_key] = [
+                                    answer.get("answer_single", "")
+                                ]
                             else:
-                                samples[index][answer_key] = "There is something error"
+                                samples[index][answer_key] = [
+                                    "There is something error"
+                                ]
                         else:
-                            print(
-                                f"answer is {isinstance(answers, list)}, has content: {hasattr(answers[0], 'content') if isinstance(answers, list) else 'N/A'}"
-                            )
                             print(
                                 f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
                             )
