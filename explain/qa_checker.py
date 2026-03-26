@@ -16,7 +16,7 @@ def conflict_check(sample):
     if not sample["answer_single"][0].strip().isdigit():
         print("not digit")
         return False
-    answer = int(sample["answer_single"].strip())
+    answer = int(sample["answer_single"][0].strip())
     return answer == sample["target"]["conflict_no"]
 
 

@@ -11,6 +11,7 @@ from generate import generate_response
 from generate import generate_sp_task
 from explain import qa_checker
 from explain import error_checker
+from explain import extract_error
 
 
 def main():
@@ -51,11 +52,6 @@ def main():
         help="并行调用线程数",
     )
     response_parser.add_argument(
-        "--merge_only",
-        action="store_true",
-        help="只从temp恢复并整合输出，不再调用API",
-    )
-    response_parser.add_argument(
         "--model",
         type=str,
         help="调用的模型名称",
@@ -88,6 +84,59 @@ def main():
         type=str,
         default="qwen3.5-plus",
         help="Model name for call_api",
+    )
+
+    extract_parser = subparsers.add_parser(
+        "extract", help="Extract repeatedly wrong samples"
+    )
+    extract_parser.add_argument(
+        "--paths",
+        nargs="+",
+        required=True,
+        help="Input answer datasets: names or *_with_answers.json files",
+    )
+    extract_parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="并行调用线程数",
+    )
+    extract_parser.add_argument(
+        "--model",
+        type=str,
+        default="qwen3.5-plus",
+        help="调用的模型名称",
+    )
+    extract_parser.add_argument(
+        "--rounds",
+        type=int,
+        default=4,
+        help="重复生成与校验轮数",
+    )
+    extract_parser.add_argument(
+        "--threshold",
+        type=int,
+        default=2,
+        help="达到该错误次数后从后续轮次移除，并进入最终数据集",
+    )
+    extract_parser.add_argument(
+        "--output-name",
+        type=str,
+        default="extract_error",
+        help="输出文件名前缀",
+    )
+    extract_parser.add_argument(
+        "--chat_type",
+        type=str,
+        choices=["single", "conflict", "fill"],
+        help="问题类型(不传则自动推断)",
+    )
+    extract_parser.add_argument(
+        "--hint",
+        type=str,
+        choices=["hint", "story"],
+        default="hint",
+        help="提示来源类型",
     )
 
     pipeline_parser = subparsers.add_parser("pipeline", help="Run the full pipeline")
@@ -158,7 +207,6 @@ def main():
             chat_type=args.chat_type,
             model=args.model,
             workers=args.workers,
-            merge_only=args.merge_only,
             hint="hint",
         )
     elif args.command == "qa":
@@ -171,6 +219,17 @@ def main():
             path=args.path,
             workers=args.workers,
             model=args.model,
+        )
+    elif args.command == "extract":
+        extract_error.main(
+            path=args.paths,
+            workers=args.workers,
+            model=args.model,
+            rounds=args.rounds,
+            threshold=args.threshold,
+            output_name=args.output_name,
+            chat_type=args.chat_type,
+            hint=args.hint,
         )
     elif args.command == "pipeline":
         # 1. 数据生成(如果已有则跳过)
@@ -187,7 +246,6 @@ def main():
             chat_type=args.chat_type,
             model=args.model,
             workers=args.workers,
-            merge_only=False,
             hint="hint",
         )
         # 3. 答案校验
