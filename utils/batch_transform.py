@@ -1,5 +1,6 @@
 import json
 import os
+import argparse
 
 from generate.generate_response import (
     detail_post_question,
@@ -80,13 +81,12 @@ def item2question(sample, chat_type):
         raise ValueError(f"Unsupported chat type: {chat_type}")
 
 
-def json_to_jsonl():
+def json_to_jsonl(name):
     """
     将 JSON 文件转换为 JSONL 文件
     :param json_file_path: 输入的 JSON 文件路径
     :param jsonl_file_path: 输出的 JSONL 文件路径
     """
-    name = "test_3_fillblank"
     if name.endswith("conflict"):
         chat_type = "conflict"
     elif name.endswith("fillblank"):
@@ -127,8 +127,7 @@ def json_to_jsonl():
         print(f"写入文件失败：{e}")
 
 
-def jsonl_to_json():
-    name = "test_3_fillblank"
+def jsonl_to_json(name):
     with open(
         f"datasets/answers/{name}_with_answers.jsonl", "r", encoding="utf-8"
     ) as f:
@@ -154,8 +153,7 @@ def jsonl_to_json():
         json.dump(original_data, f, ensure_ascii=False, indent=4)
 
 
-def check_bad_samples():
-    name = "test_50_qwenplus"
+def check_bad_samples(name):
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         answers = json.load(f)
 
@@ -177,8 +175,7 @@ def check_bad_samples():
         json.dump(new_data, f, ensure_ascii=False, indent=4)
 
 
-def merge_bad_samples():
-    name = "test_50_qwenplus"
+def merge_bad_samples(name):
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         answers = json.load(f)
     with open(
@@ -200,10 +197,48 @@ def merge_bad_samples():
 
 
 def main():
-    # json_to_jsonl()
-    jsonl_to_json()
-    # check_bad_samples()
-    # merge_bad_samples()
+    parser = argparse.ArgumentParser(
+        description="Batch transform tools for Allen inference datasets."
+    )
+    parser.add_argument(
+        "--n2l",
+        action="store_true",
+        help="Convert datasets/<name>.json to datasets/jsonl/<name>.jsonl",
+    )
+    parser.add_argument(
+        "--l2n",
+        action="store_true",
+        help="Merge datasets/answers/<name>_with_answers.jsonl into datasets/<name>.json",
+    )
+    parser.add_argument(
+        "--bad",
+        action="store_true",
+        help="Extract bad samples from datasets/answers/<name>_with_answers.json",
+    )
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Merge repaired bad samples back into datasets/answers/<name>_with_answers.json",
+    )
+    parser.add_argument(
+        "--name",
+        default="error_samples_batch",
+        help=("Dataset base name. "),
+    )
+
+    args = parser.parse_args()
+    operations = [args.n2l, args.l2n, args.bad, args.merge]
+    if sum(operations) == 0:
+        parser.error("Please specify one operation flag: -n2l, -l2n, -bad, or -merge")
+
+    if args.n2l:
+        json_to_jsonl(args.name)
+    elif args.l2n:
+        jsonl_to_json(args.name)
+    elif args.bad:
+        check_bad_samples(args.name)
+    elif args.merge:
+        merge_bad_samples(args.name)
 
 
 if __name__ == "__main__":
