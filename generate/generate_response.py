@@ -79,7 +79,7 @@ Output ONLY JSON with fields: \n
 """
 
 
-def single_chat(sample, model, hint_type):
+def single_chat(sample, model):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
@@ -90,11 +90,11 @@ def single_chat(sample, model, hint_type):
     )
     # question += post_question + "\n"
     question += detail_post_question + "\n"
-    if hint_type == "hint":
-        for i in range(len(hints)):
-            question += f"{i+1}.{hints[i]}\n"
-    elif hint_type == "story":
-        question += f"Here is the story:{sample['story']}\n"
+    # if hint_type == "hint":
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    # elif hint_type == "story":
+    #     question += f"Here is the story:{sample['story']}\n"
 
     messages = [
         {"role": "system", "content": allen_helper},
@@ -167,10 +167,10 @@ def fill_chat(sample, model):
     return answers
 
 
-def process_sample(index, sample, chat_type, model, hint):
+def process_sample(index, sample, chat_type, model):
     print(f"== 正在处理第 {index + 1} 个用例 ==")
     if chat_type == "single":
-        return single_chat(sample, model, hint)
+        return single_chat(sample, model)
     if chat_type == "conflict":
         return conflict_chat(sample, model)
     if chat_type == "fill":
@@ -260,15 +260,48 @@ def _recover_answers_from_temp(
     return restored
 
 
-def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
-    if not name:
-        raise ValueError("name is required")
-    if chat_type not in {"single", "conflict", "fill"}:
-        raise ValueError("chat_type must be 'single', 'conflict' or 'fill'")
-    if hint not in {"hint", "story"}:
-        raise ValueError("hint must be 'hint' or 'story'")
+def answer_process(samples, index, answers, answer_key, thread_no):
+    if isinstance(answers, str):
+        samples[index][answer_key] = [answers]
+    elif (
+        isinstance(answers, list)
+        and len(answers) > 0
+        and hasattr(answers[0], "content")
+    ):
+        answer = answers[0].content
+        if "thinking" in answer:
+            answer = parse_json_block(answer)
+            if answer is not None and "answer_single" in answer:
+                samples[index][answer_key] = [answer.get("answer_single", "")]
+            else:
+                samples[index][answer_key] = ["I can not determine"]
+            samples[index]["thinking"] = (
+                answer.get("thinking", "") if answer is not None else ""
+            )
+        elif "answer_single" in answer:
+            answer = parse_json_block(answer)
+            if answer is not None and "answer_single" in answer:
+                samples[index][answer_key] = [answer.get("answer_single", "")]
+            else:
+                samples[index][answer_key] = ["There is something error"]
+        else:
+            samples[index][answer_key] = [answer]
+            # if "reasoning_content" in answer:
+            #     samples[index]["reasoning_content"] = answers[
+            #         0
+            #     ].reasoning_content
+            # elif "reasoning" in answer:
+            #     samples[index]["reasoning_content"] = answers[0].reasoning
+            # else:
+            #     samples[index]["reasoning_content"] = ""
+    else:
+        print(
+            f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
+        )
 
-    samples = json.load(open(f"datasets/{name}.json", "r"))
+
+def multi_thread_generate(samples, name, chat_type, model, workers):
+    # Special problem: temp directory deletion executed after the func, becauce this func can't persist data
     answer_key = f"answer_single"
     temp_dir = f"datasets/temp/{name}_{model}"
     _ensure_dir(temp_dir)
@@ -283,13 +316,6 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
     }
     if processed_indices:
         print(f"已存在答案的样本数: {len(processed_indices)} / {len(samples)}")
-
-    if merge_only:
-        final_path = f"datasets/answers/{name}_with_answers.json"
-        with open(final_path, "w", encoding="utf-8") as f:
-            json.dump(samples, f, indent=4, ensure_ascii=False)
-        print(f"已完成整合并保存到 {final_path}")
-        return
 
     total = len(samples)
     worker_count = max(1, workers)
@@ -322,61 +348,15 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
                 continue
 
             try:
-                answers = process_sample(index, samples[index], chat_type, model, hint)
+                answers = process_sample(index, samples[index], chat_type, model)
                 with progress_lock:
-                    if chat_type == "single":
-                        if isinstance(answers, str):
-                            samples[index][answer_key] = [answers]
-                        elif isinstance(answers, list) and hasattr(
-                            answers[0], "content"
-                        ):
-                            answer = answers[0].content
-                            if "thinking" in answer:
-                                answer = parse_json_block(answer)
-                                if "answer_single" in answer:
-                                    samples[index][answer_key] = [
-                                        answer.get("answer_single", "")
-                                    ]
-                                else:
-                                    samples[index][answer_key] = ["I can not determine"]
-                                samples[index]["thinking"] = answer.get("thinking", "")
-                            else:
-                                samples[index][answer_key] = [answer]
-                        else:
-                            print(
-                                f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
-                            )
-                    elif chat_type in ["conflict", "fill"]:
-                        if isinstance(answers, str):
-                            # print("is str")
-                            samples[index][answer_key] = answers
-                        elif isinstance(answers, list) and hasattr(
-                            answers[0], "content"
-                        ):
-                            # print("has content")
-                            answer = answers[0].content
-                            answer = parse_json_block(answer)
-                            # print(f"answer:{answer}")
-                            if answer is not None and "answer_single" in answer:
-                                samples[index][answer_key] = [
-                                    answer.get("answer_single", "")
-                                ]
-                            else:
-                                samples[index][answer_key] = [
-                                    "There is something error"
-                                ]
-                        else:
-                            print(
-                                f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
-                            )
-                    # if "reasoning_content" in answer:
-                    #     samples[index]["reasoning_content"] = answers[
-                    #         0
-                    #     ].reasoning_content
-                    # elif "reasoning" in answer:
-                    #     samples[index]["reasoning_content"] = answers[0].reasoning
-                    # else:
-                    #     samples[index]["reasoning_content"] = ""
+                    answer_process(
+                        samples=samples,
+                        index=index,
+                        answers=answers,
+                        answer_key=answer_key,
+                        thread_no=thread_no,
+                    )
                     processed_indices.add(index)
 
                 thread_results.append({"index": index, "sample": samples[index]})
@@ -406,6 +386,19 @@ def main(name, chat_type, model, workers=1, merge_only=False, hint="hint"):
         for future in as_completed(futures):
             future.result()
 
+
+def main(name, chat_type, model, workers=1, hint="hint"):
+    if not name:
+        raise ValueError("name is required")
+    if chat_type not in {"single", "conflict", "fill"}:
+        raise ValueError("chat_type must be 'single', 'conflict' or 'fill'")
+    if hint not in {"hint", "story"}:
+        raise ValueError("hint must be 'hint' or 'story'")
+    temp_dir = f"datasets/temp/{name}_{model}"
+
+    samples = json.load(open(f"datasets/{name}.json", "r"))
+    multi_thread_generate(samples, name, chat_type, model, workers)
+
     # 答案整合：所有线程都处理完后，输出最终答案文件
     final_path = f"datasets/answers/{name}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
@@ -424,5 +417,4 @@ if __name__ == "__main__":
         model="",
         workers=1,
         merge_only=False,
-        hint="hint",
     )
