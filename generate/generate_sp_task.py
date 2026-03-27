@@ -94,6 +94,7 @@ def generate_conflict(sample):
     new_sample = copy.deepcopy(sample)
     del new_sample["explanation"]  # no need
     hints = []
+    explanations = []
 
     # find candidate paths
     candidate_path_no = []
@@ -123,41 +124,28 @@ def generate_conflict(sample):
                 p["base_event"][0],
                 p["base_event"][1],
                 new_sample["events"],
-            )["hint"]
+            )
             hints.append(left_hint["hint"])
+            explanations.append(left_hint["explanation"])
             hints.append(right_hint["hint"])
-            hints.append(conflict_hint)
+            explanations.append(right_hint["explanation"])
+            hints.append(conflict_hint["hint"])
+            explanations.append(conflict_hint["explanation"])
             # 对应回答时的提示编号，从1开始
             new_sample["target"]["conflict_no"] = len(hints)
         else:
             p_hints = generate_hint(p, new_sample["events"], "indirect pos")
-            hint_texts = [h["hint"] for h in p_hints]
-            hints.extend(hint_texts)
-    # candidate_ids = []
-    # for i in range(len(hints)):
-    #     if not judge_relation_hint(hints[i]):
-    #         candidate_ids.append(i)
-
-    # if not candidate_ids:
-    #     # If there are no non-relation hints, we cannot create a conflict. Return the original sample.
-    #     new_sample["target"]["conflict_no"] = -1
-    #     return new_sample
-    # conflict_id = random.choice(candidate_ids)
-    # original_hint = hints[conflict_id]
-    # conflict_hint = convert_anti_hint(original_hint)
-
-    # hints[conflict_id] = conflict_hint
-    # new_sample["target"]["conflict_no"] = (
-    #     conflict_id + 1
-    # )  # 对应回答时的提示编号，从1开始
-    # new_sample["target"]["original_hint"] = original_hint
+            hints.extend([h["hint"] for h in p_hints])
+            explanations.extend([h["explanation"] for h in p_hints])
 
     target = new_sample.get("target", {})
     target_rel = target.get("rel")
-    target_hint = get_target_hint(target_rel, new_sample["events"])["hint"]
-    hints.append(target_hint)
+    target_hint = get_target_hint(target_rel, new_sample["events"])
+    hints.append(target_hint["hint"])
+    explanations.append(target_hint["explanation"])
 
     new_sample["hints"] = hints
+    new_sample["explanations"] = explanations
     return new_sample
 
 
