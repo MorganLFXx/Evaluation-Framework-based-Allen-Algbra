@@ -167,9 +167,9 @@ def call_local_api(messages, call_model) -> dict:
 
 
 def call_api(messages, call_model) -> str:
-    # return call_tongyi_api(messages, call_model).content
+    return call_tongyi_api(messages, call_model).content
     # return call_local_api(messages, call_model).content
-    return call_fast_tongyi_api(messages, call_model).content
+    # return call_fast_tongyi_api(messages, call_model).content
 
 
 def call_thinking_api(messages, call_model) -> dict:

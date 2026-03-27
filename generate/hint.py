@@ -303,7 +303,7 @@ def no_determine_length():
     choice = ATTR_HINT_TEMPLATES[Duration.NO_DETERMINE]
     return {
         "hint": random.choice(choice),
-        "explanation": "The relative length of '{event_l}' and '{event_r}' cannot be determined. So the Allen relation between events '{event_l}' and '{event_r}' is a relation independent of their relative lengths. Exclude relationships that can determine relative length. For example: f,F,s,S,e,d,D",
+        "explanation": "The relative length of '{event_l}' and '{event_r}' cannot be determined. This indicates that even if the order of start and end time points for 2 events is determined, their relative duration cannot be established.",
     }
 
 
@@ -311,7 +311,7 @@ def longer_than():
     choice = ATTR_HINT_TEMPLATES[Duration.LONGER]
     return {
         "hint": random.choice(choice),
-        "explanation": "'{event_l}' has a longer duration compared to '{event_r}'. So '{event_r}' must be part of '{event_l}'. Only relations that indicate one event is part of another are F, D, S.",
+        "explanation": "'{event_l}' has a longer duration compared to '{event_r}'. So '{event_r}' must be part of '{event_l}'. For example: F, D, S.",
     }
 
 
@@ -319,7 +319,7 @@ def shorter_than():
     choice = ATTR_HINT_TEMPLATES[Duration.SHORTER]
     return {
         "hint": random.choice(choice),
-        "explanation": "'{event_l}' has a shorter duration compared to '{event_r}'. So '{event_l}' must be part of '{event_r}'. Only relations that indicate one event is part of another are f, d, s.",
+        "explanation": "'{event_l}' has a shorter duration compared to '{event_r}'. So '{event_l}' must be part of '{event_r}'. For example: f, d, s.",
     }
 
 
@@ -327,7 +327,7 @@ def no_meeting():
     choice = ATTR_HINT_TEMPLATES[Meet.NO]
     return {
         "hint": random.choice(choice),
-        "explanation": "There is no temporal point of coincidence between '{event_l}' and '{event_r}'. So '{event_l}' and '{event_r}' do not meet at any time which excludes relationship m,M.",
+        "explanation": "There is no temporal point of coincidence between '{event_l}' and '{event_r}'. This emphasize 'no overlap' where even the time points do not coincide.",
     }
 
 
@@ -335,7 +335,7 @@ def no_overlap():
     choice = ATTR_HINT_TEMPLATES[Overlap.NO]
     return {
         "hint": random.choice(choice),
-        "explanation": "There is no temporal overlap between '{event_l}' and '{event_r}'. So '{event_l}' and '{event_r}' do not overlap in time which excludes relationships o,O,f,F,d,D,s,S,e and so on.",
+        "explanation": "There is no temporal overlap between '{event_l}' and '{event_r}'. So '{event_l}' and '{event_r}' do not overlap in time which excludes overlap-related relationships ,for example: o,O,f,F,d,D,s,S,e and so on.",
     }
 
 
@@ -343,7 +343,7 @@ def overlaps():
     choice = ATTR_HINT_TEMPLATES[Overlap.YES]
     return {
         "hint": random.choice(choice),
-        "explanation": "We can know '{event_l}' and '{event_r}' overlap in time which excludes relationships p,P,m,M.",
+        "explanation": "We can know '{event_l}' and '{event_r}' overlap in time which excludes no-overlap relationships p,P,m,M.",
     }
 
 

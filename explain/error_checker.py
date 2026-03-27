@@ -5,12 +5,12 @@
 import json
 import os
 import shutil
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from utils.chat import call_api
 from utils.format import parse_json_block
-from explain.qa_checker import sample_check
 from generate.generate_response import allen_helper
 
 
@@ -30,22 +30,22 @@ def _atomic_dump_json(path: str, data) -> None:
     os.replace(tmp_path, path)
 
 
-def build_path_summaries(paths: List[Dict[str, Any]], events: List[str]) -> List[str]:
+def build_path_summaries(paths: List[Dict[str, Any]], events) -> List[str]:
     """Build bottom-up path tree lines for LLM checking."""
     if not paths:
         return []
 
-    def _event_name(events: List[str], index: int) -> str:
+    def _event_name(events, index) -> str:
         if 0 <= index < len(events):
             return events[index]
         return f"event_{index}"
 
-    def _rel_stmt(l_idx: int, rel: str, r_idx: int) -> str:
+    def _rel_stmt(l_idx: int, rel: str, r_idx: int):
         left = _event_name(events, l_idx)
         right = _event_name(events, r_idx)
         return f"{left} {rel} {right}"
 
-    def build_line(path: Dict[str, Any], left_rel: str, right_rel: str) -> str:
+    def build_line(path: Dict[str, Any], left_rel: str, right_rel: str):
         base_l, base_r = path["base_event"]
         new_event = path["new_event"]
         target_stmt = _rel_stmt(base_l, path["target"], base_r)
@@ -90,11 +90,44 @@ def _call_llm_json(
     return parsed, raw
 
 
-def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
+def _separate_thinking(thinking: str) -> Tuple[str, str]:
+    """
+    Thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...'. This function separates the two phases and returns them as a tuple (hint_interpretation, reasoning).
+    """
+
+    hint_pattern = re.compile(
+        r"(?:^|\n)\s*1\s*[\).:-]?\s*hint\s*interpretation\s*phase\s*:?",
+        flags=re.IGNORECASE,
+    )
+    reason_pattern = re.compile(
+        r"(?:^|\n)\s*2\s*[\).:-]?\s*reasoning\s*phase\s*:?",
+        flags=re.IGNORECASE,
+    )
+
+    hint_match = hint_pattern.search(thinking)
+    reason_match = reason_pattern.search(thinking)
+
+    # Preferred split: keep only phase content (without phase titles).
+    if reason_match:
+        hint_start = hint_match.end() if hint_match else 0
+        hint_text = thinking[hint_start : reason_match.start()].strip()
+        reasoning_text = thinking[reason_match.end() :].strip()
+        return hint_text, reasoning_text
+
+    # Fallback: no explicit reasoning phase marker.
+    if hint_match:
+        return thinking[hint_match.end() :].strip(), ""
+
+    # Last fallback: return all as hint interpretation to avoid losing content.
+    return thinking, thinking
+
+
+def judge_nlu(sample, model):
     print(f"[debug] Judging NLU for sample {sample.get('id')} with model {model}")
     hints = sample.get("hints", []) or []
     explanations = sample.get("explanation", []) or []
     thinking = sample.get("thinking", "") or ""
+    thinking_nlu = _separate_thinking(thinking)[0]
 
     system = allen_helper
     user = (
@@ -103,28 +136,28 @@ def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
         Definition of Natural Language Understanding Error:
         A Natural Language Understanding Error occurs when the model incorrectly interprets the meaning of an individual hint.
         Specifically, an NLU Error occurs if the temporal relation or temporal order extracted from a single hint does not match the gold explanation provided for that hint.
-        Examples of NLU Errors include:
-        - Misinterpreting the temporal relation described in the hint.
-        - Incorrect ordering start or end times for two events
-        - Incorrectly excluding a relation that should be retained.
-        - Incorrectly retaining a relation that should be excluded.
         Important rules:
         1. NLU errors are evaluated at the level of a single hint. Each hint should be checked independently.
-        2. Do NOT evaluate reasoning or multi-hint inference at this stage.
-        3. If a hint is correctly interpreted but later not used during reasoning, this is NOT an NLU error.
-        4. Missing information alone is not sufficient to conclude an NLU error unless the interpretation directly contradicts the gold explanation.
+        2. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '1. Hint Interpretation Phase' for each hint.
+        3. If a hint is correctly interpreted but later not used or incorrectly used during reasoning, this is NOT an NLU error.
+        4. Failing to directly exclude any relationship is not an nlu error. The model is not explicitly required to directly exclude certain relationships; it is only required to interpret the basic meaning. 
+        5. Missing information alone is not sufficient to conclude an NLU error. 
         Procedure:
         For each hint:
         1. Compare the model's interpretation in the thinking process with the provided gold explanation.
         2. Determine whether the extracted temporal relation or temporal information matches the explanation.
         If any mismatch is found, classify the case as an NLU Error and stop the analysis.
-        Otherwise, conclude that no NLU Error is present. \n
+        Otherwise, conclude that no NLU Error is present. 
+        Examples of NLU Errors include:
+        - Misinterpreting the allen relation described in the hint.
+        - Incorrect ordering start or end times for two events
+        - Actively and incorrectly excluding a relation that should be retained. 
+        - Actively and incorrectly retaining a relation that should be excluded.
         """
         + "Return JSON only. Schema: "
-        '{"ok": bool, "error_type": string, "issues": [{"hint_index": int, "reason": string}], "confidence": number}. '
-        "issues must include every hint whose interpretation conflicts with the explanation. "
-        "If no issues, return an empty list and ok=true. "
-        "error_type must be one of: nlu_error, none.\n"
+        '{"ok": bool, "error_description": string}. '
+        "error_description include brief summary of every error you found."
+        "If no issues, just return ok=true. "
         "Hints and explanations:\n"
         + "\n".join(
             [
@@ -133,7 +166,7 @@ def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
             ]
         )
         + "\nModel thinking:\n"
-        + thinking
+        + thinking_nlu
     )
     messages = [
         {"role": "system", "content": system},
@@ -141,17 +174,11 @@ def judge_nlu(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
     ]
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
+        print(f"[debug] NLU judge parse failed for sample {sample.get('id')}")
         return {
             "ok": None,
-            "error_type": "none",
-            "issues": [],
-            "reason": "parse_failed",
-            "confidence": 0.0,
             "raw": raw,
         }
-    print(
-        f"[debug] NLU judge completed for sample {sample.get('id')}, ok={parsed.get('ok')}"
-    )
     return parsed
 
 
@@ -161,7 +188,6 @@ def judge_thinking(
     # 1) Use thinking + bottom-up tree to validate reasoning.
     # 2) If uncertain, include reasoning_content and re-judge.
     thinking = sample.get("thinking", "") or ""
-    # reasoning_content = sample.get("reasoning_content", "") or ""
     hints = sample.get("hints", []) or []
     explanations = sample.get("explanation", []) or []
     path_lines = path_summaries if len(path_summaries) > 0 else []
@@ -169,32 +195,28 @@ def judge_thinking(
     system = allen_helper
     user = (
         """
-        Check whether the model has made any Reasoning Errors.
-        Assumption:
-        The interpretations of individual hints have already been checked and can be assumed to be correct unless clear evidence of misunderstanding appears.
+        Check whether any Reasoning Errors in LLM's thinking.
         Definition of Reasoning Error:
-        A Reasoning Error occurs when the model makes an incorrect inference while combining information from multiple hints to derive a conclusion.
-        Examples of Reasoning Errors include:
-        - Incorrectly combining temporal relations.
-        - Deriving a relation that contradicts the inference path.
-        - Improper use of hints during reasoning.   
-        - Hallucinations occurring during reasoning lead to alterations in certain information.
-        - Failing to derive a necessary intermediate relation or timeline.
+        A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
         Important rules:
-        1. Reasoning errors occur only at the multi-hint reasoning level.
+        1. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '2. Reasoning Phase'. 
         2. If a hint is correctly interpreted but not used in the reasoning process when it should be used, this should be classified as a Reasoning Error.
-        3. If you find that a reasoning error actually originates from a misunderstanding of a single hint, then the error should be classified as an NLU Error.
-        4. The path tree and the order of hints may not match. You should determine the line being checked and the corresponding hints. 
+        3. The path tree and the order of hints may not match. It is normal that the order of path tree traversal differs from the order of actual inference.
+        4. There maybe some implicit hints that don't explicitly exist in path tree, but they provide important constraint information(It may refer to the relative duration between events, the relationship between start or end times.).
         Procedure:
         1. Examine the reasoning steps in the thinking process following the path tree.
         2. Identify the step where the reasoning becomes invalid.
-        If any incorrect inference step or missing reasoning step is detected, classify the case as a Reasoning Error.\n
+        If any incorrect inference step or missing reasoning step is detected, classify the case as a Reasoning Error.
+        Examples of Reasoning Errors include:
+        - Deriving a relation that contradicts the inference path.
+        - Improper use of hints during reasoning.   
+        - Hallucinations occurring during reasoning lead to alterations in certain information.
+        - Failing to derive a necessary intermediate relation or timeline. 
         """
         "Return JSON only. Schema: "
-        '{"ok": bool, "error_type": string, "issues": ['
-        '{"location": string, "reason": string}], "uncertain": bool, "confidence": number}. '
-        "'location' means the specific part of path tree or hints, for example, 'line 2 of path tree' or 'hint 1&2'. "
-        "error_type must be one of: reasoning_error, nlu_error(If you found NLU errors still exist), none.\n"
+        '{"ok": bool, "error_description": string}. '
+        "'error_description' means the brief summary of error you found"
+        "Note: model thinking may be truncated due to token limit. If you don't find any issues in the existing content, return ok=false and error_description: 'Thinking content is truncated. No error found in existing content'."
         "Hints and explanations:\n"
         + "\n".join(
             [
@@ -206,14 +228,14 @@ def judge_thinking(
         + "Note(How to use path tree):"
         + """
         The path tree is traversed in a bottom-up order, so the first line you see represent the more basic nodes in the tree 
-        Each node consists of two events and their Allen relation, representing the sequence of two start and two end time points.Therefore, the time sequence of detecting equivalence to relational structures is also correct.
-        For each line (i.e., bottom node + bottom node + exclude relationship-> up node), the following items need to be checked:
+        Each node consists of 2 events and their Allen relation(And some implicit hints), representing the order of 2 start and 2 end time points. Becauce the time order is equivalent to allen relation.
+        For each line (bottom node + bottom node + exclude relationship-> up node), the following items need to be checked:
         1. Do you already have information about the two lower-level nodes?
         2. Do you already have the information needed to exclude relationships?
-        3. Whether to infer the relationship between upper-level nodes based on the information from points 1 and 2
-        If 1 is detected, if the underlying node can be further subdivided, it will backtrack; otherwise, it will check whether the corresponding hint is correctly understood.
-        If 2 is detected, confirm whether the corresponding exclusion relationship hint is understood
-        If 3 is detected, determine whether an error occurred during the inference process
+        3. Whether to infer the relationship between upper-level nodes based on the information from points 1 and 2.
+        If 1 is detected, if the underlying node can be further subdivided, it will backtrack.
+        If 2 is detected, confirm whether the corresponding exclusion relationship hint is understood.
+        If 3 is detected, determine whether an error occurred during the inference process.
         """
         + "\n".join(path_lines)
         + "\nModel thinking:\n"
@@ -225,92 +247,45 @@ def judge_thinking(
     ]
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
-        print(
-            f"[debug] Thinking judge parse failed (primary) for sample {sample.get('id')}"
-        )
+        print(f"[debug] Thinking judge parse failed for sample {sample.get('id')}")
         parsed = {
             "ok": None,
-            "error_type": "none",
-            "issues": [],
-            "uncertain": True,
-            "confidence": 0.0,
             "raw": raw,
         }
-
-    if parsed.get("uncertain") is True:
-        parsed["reason"] = "uncertain"
-        print(f"[debug] Thinking judge uncertain for sample {sample.get('id')}")
-
-    # TODO: token消耗过大，暂不启用
-    # if parsed.get("uncertain") is True and reasoning_content:
-    #     follow_user = (
-    #         "Re-evaluate using the raw reasoning content below. "
-    #         "Return JSON with the same schema.\n"
-    #         + "Raw reasoning content:\n"
-    #         + reasoning_content
-    #     )
-    #     follow_messages = [
-    #         {"role": "system", "content": system},
-    #         {"role": "user", "content": user},
-    #         {"role": "assistant", "content": raw},
-    #         {"role": "user", "content": follow_user},
-    #     ]
-    #     follow_parsed, follow_raw = _call_llm_json(follow_messages, model)
-    #     if follow_parsed is None:
-    #         return {
-    #             "ok": None,
-    #             "error_type": "none",
-    #             "issues": [],
-    #             "uncertain": True,
-    #             "confidence": 0.0,
-    #             "raw": follow_raw,
-    #         }
-    #     follow_parsed["raw"] = follow_raw
-    #     return follow_parsed
 
     return parsed
 
 
-def verify_sample(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
+def verify_sample(sample, model: str) -> Dict[str, Any]:
     print(f"[debug] Verifying sample {sample.get('id')} with model {model}")
     paths = sample.get("paths", []) or []
     events = sample.get("events", []) or []
 
-    result: Dict[str, Any] = {
-        "id": sample.get("id"),
-        "target": sample.get("target"),
-        "answer_single": sample.get("answer_single"),
-        "error_type": "none",
-        "nlu_checks": [],
-        "reasoning_check": None,
-    }
-
     nlu = judge_nlu(sample, model)
-    result["nlu_checks"].append(nlu)
-    if nlu.get("ok") is False:
+    if nlu.get("ok") is not None and nlu.get("ok") is False:
         print(f"[debug] NLU error detected for sample {sample.get('id')}")
-        result["error_type"] = "nlu_error"
-        result["reasoning_check"] = None
-        return result
+        sample["error_type"] = "nlu_error"
+        sample["error_description"] = nlu.get("error_description", "")
+        return sample
+    else:
+        sample["nlu_raw"] = nlu.get("raw", "")
 
     path_summaries = build_path_summaries(paths, events)
-    result["path_summaries"] = path_summaries
-    # print(
-    #     f"[debug] Path summaries ready for sample {sample.get('id')}, count={len(path_summaries)}, lines={path_summaries}"
-    # )
+    sample["path_summaries"] = path_summaries
 
     reason = judge_thinking(sample, path_summaries, model)
-    result["reasoning_check"] = reason
-    if reason.get("ok") is False:
+    if reason.get("ok") is not None and reason.get("ok") is False:
         print(f"[debug] Reasoning error detected for sample {sample.get('id')}")
-        result["error_type"] = "reasoning_error"
+        sample["error_type"] = "reasoning_error"
+        sample["error_description"] = reason.get("error_description", "")
     else:
         print(
             f"[debug] Reasoning uncertain for sample {sample.get('id')}, ok={reason.get('ok')}"
         )
-        result["error_type"] = "unknown"
+        sample["error_type"] = "unknown"
+        sample["reasoning_raw"] = reason.get("raw", "")
 
-    return result
+    return sample
 
 
 def _split_indices_contiguous(total: int, workers: int):
@@ -335,21 +310,18 @@ def main(path, workers=1, model="qwen3.5-plus"):
     if not path:
         raise ValueError("path is required")
     input_path = f"datasets/answers/{path}_with_answers.json"
-    report: Dict[str, Any] = {
-        "meta": {
-            "inputs": input_path,
-            "model": model,
-            "total": 0,
-            "nlu_errors": 0,
-            "reasoning_errors": 0,
-            "ok": 0,
-        },
-        "samples": [],
+    meta = {
+        "inputs": input_path,
+        "model": model,
+        "total": 0,
+        "nlu_errors": 0,
+        "reasoning_errors": 0,
+        "ok": 0,
     }
+    report_samples = []
 
     temp_dir = f"datasets/temp/{path}_explain"
     _ensure_dir(temp_dir)
-    # print(f"[debug] Temp checkpoint dir: {temp_dir}")
 
     data = _read_json(input_path)
     print(f"[debug] Loaded {len(data)} samples from {input_path}")
@@ -366,31 +338,26 @@ def main(path, workers=1, model="qwen3.5-plus"):
 
     def worker_task(worker_id: int, start: int, end: int):
         print(f"[debug] Worker {worker_id + 1} handling range [{start}, {end})")
-        worker_out_path = os.path.join(temp_dir, f"{path}_{worker_id + 1}.json")
+        worker_out_path = f"{temp_dir}/{path}_{worker_id + 1}.json"
         local_results = []
         local_total = 0
         local_ok = 0
         local_nlu = 0
         local_reason = 0
 
-        # resume existing worker checkpoint if present
-        if os.path.exists(worker_out_path):
-            try:
-                with open(worker_out_path, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-                if isinstance(existing, list):
-                    local_results = existing
-            except Exception:
-                local_results = []
-
         for index in range(start, end):
             sample = data[index]
             local_total += 1
-            if sample_check(sample) is True:
+            if "right" not in sample:
+                # print(
+                #     f"[debug] Worker {worker_id + 1} sample {sample.get('id')} missing 'right' field, skipping"
+                # )
+                continue
+            if sample.get("right") is True:
                 local_ok += 1
-                print(
-                    f"[debug] Worker {worker_id + 1} sample {sample.get('id')} correct, skipping"
-                )
+                # print(
+                #     f"[debug] Worker {worker_id + 1} sample {sample.get('id')} correct, skipping"
+                # )
                 local_results.append(
                     {
                         "index": index,
@@ -439,26 +406,26 @@ def main(path, workers=1, model="qwen3.5-plus"):
             ]
             for future in as_completed(futures):
                 chunk = future.result()
-                report["meta"]["total"] += chunk["total"]
-                report["meta"]["ok"] += chunk["ok"]
-                report["meta"]["nlu_errors"] += chunk["nlu_errors"]
-                report["meta"]["reasoning_errors"] += chunk["reasoning_errors"]
+                meta["total"] += chunk["total"]
+                meta["ok"] += chunk["ok"]
+                meta["nlu_errors"] += chunk["nlu_errors"]
+                meta["reasoning_errors"] += chunk["reasoning_errors"]
                 merged_results.extend(chunk["results"])
 
     merged_results.sort(key=lambda item: item[0])
-    report["samples"] = [item[1] for item in merged_results]
+    report_samples = [item[1] for item in merged_results]
 
     with open(
         f"datasets/explain/{path}_with_explanation.json", "w", encoding="utf-8"
     ) as f:
-        json.dump(report, f, ensure_ascii=False, indent=4)
+        json.dump(report_samples, f, ensure_ascii=False, indent=4)
 
     # 删除临时文件夹
     shutil.rmtree(temp_dir)
 
     print(
-        "Done. total={total}, ok={ok}, nlu_errors={nlu_errors}, reasoning_errors={reasoning_errors}".format(
-            **report["meta"]
+        "total={total}, ok={ok}, nlu_errors={nlu_errors}, reasoning_errors={reasoning_errors}".format(
+            **meta
         )
     )
 

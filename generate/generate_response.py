@@ -39,7 +39,9 @@ Output ONLY JSON with fields: \n
     "answer_single": "The abbreviation of the final answer. If you still have multiple answers and cannot decide, answer all of them."
 }
 Note: 
-1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. In hint interpretation phase, you should interpret basic meaning of all hints one by one. In reasoning phase, you should provide thinking process bases on the interpreted hints.
+1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. 
+    - In hint interpretation phase, you should interpret basic meaning(the Allen relation, or relative length, or order of start and end points of the 2 events that can be judged.) of all hints one by one. 
+    - In reasoning phase, you should provide thinking process bases on information from the hint interpretation phase.
 2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """
 
@@ -90,11 +92,8 @@ def single_chat(sample, model):
     )
     # question += post_question + "\n"
     question += detail_post_question + "\n"
-    # if hint_type == "hint":
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
-    # elif hint_type == "story":
-    #     question += f"Here is the story:{sample['story']}\n"
 
     messages = [
         {"role": "system", "content": allen_helper},
@@ -286,14 +285,6 @@ def answer_process(samples, index, answers, answer_key, thread_no):
                 samples[index][answer_key] = ["There is something error"]
         else:
             samples[index][answer_key] = [answer]
-            # if "reasoning_content" in answer:
-            #     samples[index]["reasoning_content"] = answers[
-            #         0
-            #     ].reasoning_content
-            # elif "reasoning" in answer:
-            #     samples[index]["reasoning_content"] = answers[0].reasoning
-            # else:
-            #     samples[index]["reasoning_content"] = ""
     else:
         print(
             f"  ⚠️ 线程 {thread_no} 处理第 {index + 1} 个用例时，答案格式不符合预期，已保存原始回答: {answers}"
