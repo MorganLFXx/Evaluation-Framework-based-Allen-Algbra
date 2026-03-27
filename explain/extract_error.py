@@ -54,6 +54,28 @@ def batch_responses(samples: list, chat_type, workers: int, model: str):
     shutil.rmtree("datasets/temp/error_extract")
 
 
+def batch_check(names: list):
+    samples = load_datasets(names)
+    samples = sample_preprocess(samples)
+    with open("datasets/answers/error_samples_batch_with_answers.json", "r") as f:
+        results = json.load(f)
+    final_samples = []
+    for sample in samples:
+        sample_id = sample["id"]
+        corresponding_results = results[4 * sample_id : 4 * sample_id + 4]
+        # "right" may be missing in some results, which means the model fails to answer the question, we treat it as wrong
+        right_count = sum(
+            [1 for res in corresponding_results if res.get("right", False) == True]
+        )
+        if right_count < 2:
+            final_samples.append(sample)
+    with open("datasets/error_samples_filtered.json", "w") as f:
+        json.dump(final_samples, f, indent=4)
+    print(
+        f"Filtered {len(final_samples)} difficult samples from {len(samples)} error samples."
+    )
+
+
 def batch_generate(names: list):
     samples = load_datasets(names)
     samples = sample_preprocess(samples)
@@ -103,10 +125,15 @@ def main(names: list, ques_type, workers, model):
     shutil.rmtree(temp_answer_path)
 
 
-if __name__ == "__main__":
+def main_batch():
     model = "qwenplus"
     template = "{name}_{model}"
     name_list = ["test_bases", "test_4", "test_15", "test_20", "test_25", "test_50"]
     path_list = [template.format(name=name, model=model) for name in name_list]
-    batch_generate(path_list)
-    # main()
+    # batch_generate(path_list)
+    batch_check(path_list)
+
+
+if __name__ == "__main__":
+    main()
+    # main_batch()
