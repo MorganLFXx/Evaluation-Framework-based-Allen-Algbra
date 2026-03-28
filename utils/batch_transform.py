@@ -7,6 +7,8 @@ from generate.generate_response import (
     allen_helper,
     post_question_conflict,
     post_question_fill,
+    detail_post_question_conflict,
+    detail_post_question_fill,
 )
 from utils.format import parse_json_block
 
@@ -43,7 +45,8 @@ def item2conflict(sample):
     hints = sample["hints"]
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
-    question += post_question_conflict + "\n"
+    # question += post_question_conflict + "\n"
+    question += detail_post_question_conflict
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
@@ -56,13 +59,13 @@ def item2fill(sample):
     event_l, event_r = sample["events"][l_no], sample["events"][r_no]
     question = (
         f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
-        f"Based on the existing hints, please try to guess the Allen relation between {event_l} and {event_r}, "
-        f"or attempt to describe the order of the start and end time points of {event_l} and {event_r}."
+        f"Based on the existing hints, please describe the order of the start and end time points of {event_l} and {event_r}."
     )
     hints = sample["hints"]
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
-    question += post_question_fill + "\n"
+    # question += post_question_fill + "\n"
+    question += detail_post_question_fill + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
