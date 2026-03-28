@@ -49,35 +49,52 @@ post_question_conflict = """
 Answer the number preceding the hint where you confirmed the existence of conflicts. If there are no conflicts, answer -1.
 Output ONLY JSON with fields: \n
 {
-    "answer_single": "The number preceding the hint where you confirmed the existence of conflicts."
+    "answer_single": "int-The number preceding the hint where you confirmed the existence of conflicts."
 }
 """
 
 detail_post_question_conflict = """
-You should provide your thoughtfully considered thinking process.
+Answer the number preceding the hint where you confirmed the existence of conflicts. If there are no conflicts, answer -1.
+Then compact your thoughtfully considered thinking process, including:
+    - Provide your brief interpretation of each hint. 
+    - Explain how you find the conflict, and why it is a conflict, before finally giving the answer.
 Output ONLY JSON with fields: \n
 {
     "thinking": "Summary of your thoughtfully considered thinking process",
-    "answer_single": "The number preceding the hint where you confirmed the existence of conflicts."
+    "answer_single": "int-The number preceding the hint where you confirmed the existence of conflicts."
 }
+Note: 
+1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. 
+    - In hint interpretation phase, you should interpret basic meaning(the Allen relation, or relative length, or order of start and end points of the 2 events that can be judged.) of all hints one by one. 
+    - In reasoning phase, you should provide thinking process bases on information from the hint interpretation phase.
+2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """
 
 post_question_fill = """
-Note: There are multiple possibilities for the missing hint; please provide only the most likely one.
+There are multiple possibilities for the missing hint; please provide only the most likely one.
+You can use the format like:'Start(A)<Start(B)<End(A)=End(B)' or 'Start(A)<Start(B)<End(B)<End(A)' to describe the order of the start and end time points of the two events.(A and B are just placeholders)
 Output ONLY JSON with fields: \n
 {
-    "answer_single": "The Allen relation between the two events in the missing hint, or the order of the start and end time points of the two events."
+    "answer_single": "The order of the start and end time points of the two events.'"
 }
 """
 
 detail_post_question_fill = """
-You should provide summary of your thoughtfully considered thinking process.
-Note: There are multiple possibilities for the missing hint; please provide only the most likely one.
+There are multiple possibilities for the missing hint; please provide only the most likely one.
+You should provide summary of your thoughtfully considered thinking process, including:
+    - Provide your brief interpretation of each hint. 
+    - Explain where the missing hint is and why, and how you get the answer, before finally giving the answer.
 Output ONLY JSON with fields: \n
 {
     "thinking": "Summary of your thoughtfully considered thinking process",
-    "answer_single": "The missing hint that describes the Allen relation between the two events, or the order of the start and end time points of the two events."
+    "answer_single": "The order of the start and end time points of the two events.'"
 }
+Note: 
+1. You can use the format like:'Start(A)<Start(B)<End(A)=End(B)' or 'Start(A)<Start(B)<End(B)<End(A)' to describe the order of the start and end time points of the two events.(A and B are just placeholders)
+2. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. 
+    - In hint interpretation phase, you should interpret basic meaning(the Allen relation, or relative length, or order of start and end points of the 2 events that can be judged.) of all hints one by one. 
+    - In reasoning phase, you should provide thinking process bases on information from the hint interpretation phase.
+3. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """
 
 
@@ -120,8 +137,8 @@ def conflict_chat(sample, model):
     hints = sample["hints"]
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
-    # question += detail_post_question_conflict + "\n"
-    question += post_question_conflict + "\n"
+    question += detail_post_question_conflict + "\n"
+    # question += post_question_conflict + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
@@ -143,14 +160,13 @@ def fill_chat(sample, model):
     event_l, event_r = sample["events"][l_no], sample["events"][r_no]
     question = (
         f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
-        f"Based on the existing hints, please try to guess the Allen relation between {event_l} and {event_r}, "
-        f"or attempt to describe the order of the start and end time points of {event_l} and {event_r}."
+        f"Based on the existing hints, please describe the order of the start and end time points of {event_l} and {event_r}."
     )
     hints = sample["hints"]
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
-    # question += detail_post_question_fill + "\n"
-    question += post_question_fill + "\n"
+    question += detail_post_question_fill + "\n"
+    # question += post_question_fill + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},

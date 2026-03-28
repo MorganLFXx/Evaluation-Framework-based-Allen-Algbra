@@ -299,46 +299,12 @@ def main_link_length():
         json.dump(new_data, f, indent=4, ensure_ascii=False)
 
 
-# def main_all_real():
-# with open("datas/all_base_samples.json", "r") as f:
-#     samples = json.load(f)
-
-# for sample in samples:
-#     events = sample["events"]
-#     real_events = get_event_by_rel(sample["target"]["rel"])
-#     events[0] = real_events["from"]
-#     events[1] = real_events["to"]
-#     events[2] = random_event_name()
-#     events[
-#         2
-#     ] += "(This is a fictional event without actual time, but the event relationships it provides are real.)"
-
-#     sample["hints"] = generate_negative_hints(sample["formulas"], events)
-#     sample["id"] = samples.index(sample)
-# with open("datasets/test_reals.json", "r") as f:
-#     samples = json.load(f)
-# for sample in samples:
-#     virtual_event = random_event_name()
-#     sample["events"][2] = virtual_event
-#     hints = [
-#         f"{virtual_event} is a fictional event without actual time, but the event relationships it provides are real."
-#     ]
-#     hints.extend(generate_negative_hints(sample["formulas"], sample["events"]))
-#     sample["hints"] = hints
-#     sample["id"] = samples.index(sample)
-
-# with open("datasets/test_reals_virtual.json", "w") as f:
-#     json.dump(samples, f, indent=4, ensure_ascii=False)
-
-
 if __name__ == "__main__":
     # general sample
     # main(n=1, name="sample", depth=1, hint="direct neg")
-    # all real base sample
-    # main_all_real()
     # all base samples
-    # main_base()
+    main_base()
     # link length samples
-    main_link_length()
+    # main_link_length()
     # debug
     # main_debug_base_tree()

@@ -3,7 +3,7 @@ import random
 import copy
 import argparse
 
-from generate.hint import judge_relation_hint, convert_anti_hint, get_rels_explanations
+from generate.hint import get_rels_explanations
 from generate.generate_hints import (
     get_relation_hint,
     generate_hint,
@@ -25,6 +25,7 @@ def generate_fill(sample):
     """
     new_sample = copy.deepcopy(sample)
     new_hints = []
+    new_explanations = []
     candidate_path_no = []
 
     for i in range(len(sample["paths"])):
@@ -63,23 +64,27 @@ def generate_fill(sample):
                 hint_left,
                 hint_right,
                 new_sample["events"],
-            )["hint"]
-            new_hints.append(bridge_hint)
+            )
+            new_hints.append(bridge_hint["hint"])
+            new_explanations.append(bridge_hint["explanation"])
 
             target_hint = get_relation_hint(
                 target,
                 base_left,
                 base_right,
                 new_sample["events"],
-            )["hint"]
-            new_hints.append(target_hint)
+            )
+            new_hints.append(target_hint["hint"])
+            new_explanations.append(target_hint["explanation"])
         else:
             p_hints = generate_hint(p, new_sample["events"], "indirect pos")
             hint_texts = [h["hint"] for h in p_hints]
+            explanation_texts = [h["explanation"] for h in p_hints]
             new_hints.extend(hint_texts)
+            new_explanations.extend(explanation_texts)
 
-    del new_sample["explanation"]  # no need
     new_sample["hints"] = new_hints
+    new_sample["explanation"] = new_explanations
     return new_sample
 
 

@@ -2,8 +2,6 @@ import json
 import argparse
 import re
 
-from utils.chat import call_api
-
 
 def single_check(sample):
     if sample["answer_single"][0].strip().startswith("<think>"):
@@ -13,43 +11,21 @@ def single_check(sample):
 
 def conflict_check(sample):
     # judge answer_single is a int
-    if not sample["answer_single"][0].strip().isdigit():
-        print("not digit")
-        return False
-    answer = int(sample["answer_single"][0].strip())
+    # if not sample["answer_single"][0].strip().isdigit():
+    #     print("not digit")
+    #     return False
+    # answer = int(sample["answer_single"][0].strip())
+    answer = sample["answer_single"][0]
     return answer == sample["target"]["conflict_no"]
 
 
 def fill_check(sample):
     candidates = list(sample["target"]["blank_candidate"])
     answer = sample["answer_single"][0].strip()
-    if not answer or answer.startswith("<think>"):
-        return False
-
-    normalized_candidates = [str(c).strip() for c in candidates if str(c).strip()]
-
-    prompt = (
-        "You are a strict answer checker.\n"
-        "Task: determine whether ANSWER matches any one of CANDIDATES in meaning.\n"
-        "Return ONLY one word: true or false (lowercase).\n"
-        "Do not output anything else.\n\n"
-        f"ANSWER:\n{answer}\n\n"
-        "CANDIDATES:\n" + "\n".join([f"- {c}" for c in normalized_candidates])
-    )
-
-    try:
-        raw = call_api([{"role": "user", "content": prompt}], "qwen3.5-flash")
-    except Exception as exc:
-        print(f"fill_check api error: {exc}")
-        return False
-
-    text = str(raw).strip().lower()
-    if text in {"true", "false"}:
-        result = text == "true"
-    else:
-        match = re.search(r"\b(true|false)\b", text)
-        result = bool(match and match.group(1) == "true")
-    return result
+    for c in candidates:
+        if answer in c:
+            return True
+    return False
 
 
 def sample_check(sample):

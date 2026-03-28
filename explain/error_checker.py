@@ -30,27 +30,31 @@ def _atomic_dump_json(path: str, data) -> None:
     os.replace(tmp_path, path)
 
 
-def build_path_summaries(paths: List[Dict[str, Any]], events) -> List[str]:
+def _event_name(events: List[str], index: int) -> str:
+    if 0 <= index < len(events):
+        return events[index]
+    return f"event_{index}"
+
+
+def _rel_stmt(l_idx: int, rel: str, r_idx: int, events: List[str]):
+    left = _event_name(events, l_idx)
+    right = _event_name(events, r_idx)
+    return f"{left} {rel} {right}"
+
+
+def build_bottom_up_path_summaries(
+    paths: List[Dict[str, Any]], events: List[str]
+) -> List[str]:
     """Build bottom-up path tree lines for LLM checking."""
     if not paths:
         return []
 
-    def _event_name(events, index) -> str:
-        if 0 <= index < len(events):
-            return events[index]
-        return f"event_{index}"
-
-    def _rel_stmt(l_idx: int, rel: str, r_idx: int):
-        left = _event_name(events, l_idx)
-        right = _event_name(events, r_idx)
-        return f"{left} {rel} {right}"
-
     def build_line(path: Dict[str, Any], left_rel: str, right_rel: str):
         base_l, base_r = path["base_event"]
         new_event = path["new_event"]
-        target_stmt = _rel_stmt(base_l, path["target"], base_r)
-        left_stmt = _rel_stmt(base_l, left_rel, new_event)
-        right_stmt = _rel_stmt(new_event, right_rel, base_r)
+        target_stmt = _rel_stmt(base_l, path["target"], base_r, events)
+        left_stmt = _rel_stmt(base_l, left_rel, new_event, events)
+        right_stmt = _rel_stmt(new_event, right_rel, base_r, events)
         excluded = path.get("excluded", [])
         excluded_text = ",".join(excluded) if excluded else ""
         return f"{left_stmt} + {right_stmt} + not({excluded_text}) -> {target_stmt}"
@@ -74,6 +78,52 @@ def build_path_summaries(paths: List[Dict[str, Any]], events) -> List[str]:
         left_rel = node["path"][0] if left_idx == -1 else paths[left_idx]["target"]
         right_rel = node["path"][1] if right_idx == -1 else paths[right_idx]["target"]
         lines.append(build_line(node, left_rel, right_rel))
+
+    roots = [i for i, p in enumerate(paths) if p.get("parent", -1) == -1]
+    for root in roots:
+        dfs(root)
+
+    return lines
+
+
+def build_top_down_path_summaries(paths: List[Dict[str, Any]], events) -> List[str]:
+    """
+    Build top-down path tree lines for LLM checking.
+    Line Format: up_node -> left_node + right_node + exclude_relationship
+    """
+    if not paths:
+        return []
+
+    def build_line(path: Dict[str, Any], left_rel: str, right_rel: str) -> str:
+        base_l, base_r = path["base_event"]
+        new_event = path["new_event"]
+        up_stmt = _rel_stmt(base_l, path["target"], base_r, events)
+        left_stmt = _rel_stmt(base_l, left_rel, new_event, events)
+        right_stmt = _rel_stmt(new_event, right_rel, base_r, events)
+        excluded = path.get("excluded", [])
+        excluded_text = f"not({','.join(excluded)})" if excluded else "not()"
+        return f"{up_stmt} -> {left_stmt} + {right_stmt} + {excluded_text}"
+
+    lines: List[str] = []
+    visited = set()
+
+    def dfs(idx: int) -> None:
+        if idx in visited:
+            return
+        visited.add(idx)
+
+        node = paths[idx]
+        left_idx = node.get("left", -1)
+        right_idx = node.get("right", -1)
+
+        left_rel = node["path"][0] if left_idx == -1 else paths[left_idx]["target"]
+        right_rel = node["path"][1] if right_idx == -1 else paths[right_idx]["target"]
+        lines.append(build_line(node, left_rel, right_rel))
+
+        if left_idx != -1:
+            dfs(left_idx)
+        if right_idx != -1:
+            dfs(right_idx)
 
     roots = [i for i, p in enumerate(paths) if p.get("parent", -1) == -1]
     for root in roots:
@@ -113,13 +163,129 @@ def _separate_thinking(thinking: str) -> Tuple[str, str]:
         hint_text = thinking[hint_start : reason_match.start()].strip()
         reasoning_text = thinking[reason_match.end() :].strip()
         return hint_text, reasoning_text
-
     # Fallback: no explicit reasoning phase marker.
     if hint_match:
         return thinking[hint_match.end() :].strip(), ""
 
-    # Last fallback: return all as hint interpretation to avoid losing content.
     return thinking, thinking
+
+
+def _build_tips(sample):
+    thinking = sample.get("thinking", "") or ""
+    hints = sample.get("hints", []) or []
+    explanations = sample.get("explanation", []) or []
+    if "blank_object" in sample["target"]:
+        path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
+    else:
+        path_lines = build_bottom_up_path_summaries(sample["paths"], sample["events"])
+
+    user = (
+        "Return JSON only. Schema: "
+        '{"ok": bool, "error_description": string}. '
+        "'error_description' means the brief summary of error you found"
+        "Note: model thinking may be truncated due to token limit. If you don't find any issues in the existing content, return ok=false and error_description: 'Thinking content is truncated. No error found in existing content'."
+        "Hints and explanations:\n"
+        + "\n".join(
+            [
+                f"- Hint {i+1}: {h} | Explanation: {e}"
+                for i, (h, e) in enumerate(zip(hints, explanations))
+            ]
+        )
+        + "\nModel thinking:\n"
+        + thinking
+    )
+    if "blank_object" in sample["target"]:
+        fill_tips = (
+            """
+            Check whether any Reasoning Errors in LLM's thinking.
+            Definition of Reasoning Error:
+            A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
+            Important rules:
+            1. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '2. Reasoning Phase'. 
+            2. The path tree and the order of hints may not match. It is normal that the order of path tree traversal differs from the order of actual inference.
+            3. There maybe some implicit hints that don't explicitly exist in path tree, but they provide important constraint information(It may refer to the relative duration between events, the relationship between start or end times.).
+            Procedure:
+            1. Retrieve along the top-down path tree and check where information is missing and what information needs to make the path valid(Refer to standard answer).
+            2. Then compare the difference between model's thinking and the retrieval process just now, and analyze the problems in model's thinking.
+            """
+            + "The candidate standard answer for the blank object are:"
+            + "\n".join([f"- {opt}" for opt in sample["target"]["blank_candidate"]])
+            + "Please analyze the common characteristics of these candidate hints that make the path valid."
+            + f"And then compare to your answer {sample["answer_single"][0]}"
+        )
+        fill_tree = """
+            Path tree (top-down order, follow the path tree step by step to check):
+            Each node consists of 2 events and their Allen relation(And some implicit hints), representing the order of 2 start and 2 end time points. Becauce the time order is equivalent to allen relation.
+            Line format: up node -> bottom node + bottom node + exclude relation
+        """ + "\n".join(
+            path_lines
+        )
+        tips = fill_tips + user + fill_tree
+    elif "conflict_no" in sample["target"]:
+        conflict_tips = (
+            """
+            Check whether any Reasoning Errors in LLM's thinking.
+            Definition of Reasoning Error:
+            A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
+            Important rules:
+            1. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '2. Reasoning Phase'. 
+            2. The path tree and the order of hints may not match. It is normal that the order of path tree traversal differs from the order of actual inference.
+            3. There maybe some implicit hints that don't explicitly exist in path tree, but they provide important constraint information(It may refer to the relative duration between events, the relationship between start or end times.).
+            Procedure:
+            1. Based on the standard answer and path tree, analyze why there is a contradiction.
+            2. Analyze the thinking process to determine why the contradiction was not found whether you were misled somewhere or failed to realize that this point would give rise to a contradiction.
+            """
+            f"Standard answer: The conflict hint is hint {sample["target"]["conflict_no"]}:"
+            + f"{hints[sample['target']['conflict_no']-1]}"
+        )
+        conflict_tree = """
+            In the original question, I've told you 'All hints directly describe the relation between 2 events is absolutely correct.'
+            'Directly describe' means you can directly determine the allen relation(Or complete the sorting of four time points including the start and end times of two events) between 2 event based on this hint without any other hints.
+            So you can check along the path tree and think about why the hint in the standard answer inevitably lead to conflicts.
+            The path tree(with original no-conflict hints) is traversed in a bottom-up order, so the first line you see represent the more basic nodes in the tree 
+            Each node consists of 2 events and their Allen relation(And some implicit hints), representing the order of 2 start and 2 end time points. Becauce the time order is equivalent to allen relation.
+            Line format: bottom node + bottom node + exclude relation -> up node
+            """ + "\n".join(
+            path_lines
+        )
+        tips = conflict_tips + user + conflict_tree
+    else:
+        single_tips = """
+            Check whether any Reasoning Errors in LLM's thinking.
+            Definition of Reasoning Error:
+            A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
+            Important rules:
+            1. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '2. Reasoning Phase'. 
+            2. If a hint is correctly interpreted but not used in the reasoning process when it should be used, this should be classified as a Reasoning Error.
+            3. The path tree and the order of hints may not match. It is normal that the order of path tree traversal differs from the order of actual inference.
+            4. There maybe some implicit hints that don't explicitly exist in path tree, but they provide important constraint information(It may refer to the relative duration between events, the relationship between start or end times.).
+            Procedure:
+            1. Examine the reasoning steps in the thinking process following the path tree.
+            2. Identify the step where the reasoning becomes invalid.
+            If any incorrect inference step or missing reasoning step is detected, classify the case as a Reasoning Error.
+            Examples of Reasoning Errors include:
+            - Deriving a relation that contradicts the inference path.
+            - Improper use of hints during reasoning.   
+            - Hallucinations occurring during reasoning lead to alterations in certain information.
+            - Failing to derive a necessary intermediate relation or timeline. 
+        """
+        single_tree = """
+            Path tree (bottom-up order, follow the path tree step by step to check):
+            Note(How to use path tree):
+            The path tree is traversed in a bottom-up order, so the first line you see represent the more basic nodes in the tree 
+            Each node consists of 2 events and their Allen relation(And some implicit hints), representing the order of 2 start and 2 end time points. Becauce the time order is equivalent to allen relation.
+            For each line (bottom node + bottom node + exclude relation -> up node), the following items need to be checked:
+            1. Do you already have information about the two lower-level nodes?
+            2. Do you already have the information needed to exclude relationships?
+            3. Whether to infer the relationship between upper-level nodes based on the information from points 1 and 2.
+            If 1 is detected, if the underlying node can be further subdivided, it will backtrack.
+            If 2 is detected, confirm whether the corresponding exclusion relationship hint is understood.
+            If 3 is detected, determine whether an error occurred during the inference process.
+            """ + "\n".join(
+            path_lines
+        )
+        tips = single_tips + user + single_tree
+    return tips
 
 
 def judge_nlu(sample, model):
@@ -182,68 +348,13 @@ def judge_nlu(sample, model):
     return parsed
 
 
-def judge_thinking(
-    sample: Dict[str, Any], path_summaries: List[str], model: str
-) -> Dict[str, Any]:
-    # 1) Use thinking + bottom-up tree to validate reasoning.
-    # 2) If uncertain, include reasoning_content and re-judge.
-    thinking = sample.get("thinking", "") or ""
-    hints = sample.get("hints", []) or []
-    explanations = sample.get("explanation", []) or []
-    path_lines = path_summaries if len(path_summaries) > 0 else []
-
+def judge_thinking(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
     system = allen_helper
-    user = (
-        """
-        Check whether any Reasoning Errors in LLM's thinking.
-        Definition of Reasoning Error:
-        A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
-        Important rules:
-        1. Model's thinking format is '1. Hint Interpretation Phase: ... 2. Reasoning Phase: ...', you just need to check content in '2. Reasoning Phase'. 
-        2. If a hint is correctly interpreted but not used in the reasoning process when it should be used, this should be classified as a Reasoning Error.
-        3. The path tree and the order of hints may not match. It is normal that the order of path tree traversal differs from the order of actual inference.
-        4. There maybe some implicit hints that don't explicitly exist in path tree, but they provide important constraint information(It may refer to the relative duration between events, the relationship between start or end times.).
-        Procedure:
-        1. Examine the reasoning steps in the thinking process following the path tree.
-        2. Identify the step where the reasoning becomes invalid.
-        If any incorrect inference step or missing reasoning step is detected, classify the case as a Reasoning Error.
-        Examples of Reasoning Errors include:
-        - Deriving a relation that contradicts the inference path.
-        - Improper use of hints during reasoning.   
-        - Hallucinations occurring during reasoning lead to alterations in certain information.
-        - Failing to derive a necessary intermediate relation or timeline. 
-        """
-        "Return JSON only. Schema: "
-        '{"ok": bool, "error_description": string}. '
-        "'error_description' means the brief summary of error you found"
-        "Note: model thinking may be truncated due to token limit. If you don't find any issues in the existing content, return ok=false and error_description: 'Thinking content is truncated. No error found in existing content'."
-        "Hints and explanations:\n"
-        + "\n".join(
-            [
-                f"- Hint {i+1}: {h} | Explanation: {e}"
-                for i, (h, e) in enumerate(zip(hints, explanations))
-            ]
-        )
-        + "\nPath tree (bottom-up order, follow the path tree step by step to check):\n"
-        + "Note(How to use path tree):"
-        + """
-        The path tree is traversed in a bottom-up order, so the first line you see represent the more basic nodes in the tree 
-        Each node consists of 2 events and their Allen relation(And some implicit hints), representing the order of 2 start and 2 end time points. Becauce the time order is equivalent to allen relation.
-        For each line (bottom node + bottom node + exclude relationship-> up node), the following items need to be checked:
-        1. Do you already have information about the two lower-level nodes?
-        2. Do you already have the information needed to exclude relationships?
-        3. Whether to infer the relationship between upper-level nodes based on the information from points 1 and 2.
-        If 1 is detected, if the underlying node can be further subdivided, it will backtrack.
-        If 2 is detected, confirm whether the corresponding exclusion relationship hint is understood.
-        If 3 is detected, determine whether an error occurred during the inference process.
-        """
-        + "\n".join(path_lines)
-        + "\nModel thinking:\n"
-        + thinking
-    )
+    tips = _build_tips(sample)
+    path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
     messages = [
         {"role": "system", "content": system},
-        {"role": "user", "content": user},
+        {"role": "user", "content": tips},
     ]
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
@@ -251,15 +362,14 @@ def judge_thinking(
         parsed = {
             "ok": None,
             "raw": raw,
+            "path_tree": path_lines,
         }
-
+    parsed["path_tree"] = path_lines
     return parsed
 
 
 def verify_sample(sample, model: str) -> Dict[str, Any]:
     print(f"[debug] Verifying sample {sample.get('id')} with model {model}")
-    paths = sample.get("paths", []) or []
-    events = sample.get("events", []) or []
 
     nlu = judge_nlu(sample, model)
     if nlu.get("ok") is not None and nlu.get("ok") is False:
@@ -270,10 +380,7 @@ def verify_sample(sample, model: str) -> Dict[str, Any]:
     else:
         sample["nlu_raw"] = nlu.get("raw", "")
 
-    path_summaries = build_path_summaries(paths, events)
-    sample["path_summaries"] = path_summaries
-
-    reason = judge_thinking(sample, path_summaries, model)
+    reason = judge_thinking(sample, model)
     if reason.get("ok") is not None and reason.get("ok") is False:
         print(f"[debug] Reasoning error detected for sample {sample.get('id')}")
         sample["error_type"] = "reasoning_error"
@@ -284,6 +391,7 @@ def verify_sample(sample, model: str) -> Dict[str, Any]:
         )
         sample["error_type"] = "unknown"
         sample["reasoning_raw"] = reason.get("raw", "")
+    sample["path_tree"] = reason.get("path_tree", [])
 
     return sample
 
