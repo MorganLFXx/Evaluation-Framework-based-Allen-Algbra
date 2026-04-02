@@ -40,7 +40,7 @@ Output ONLY JSON with fields: \n
 }
 Note: 
 1. The 'thinking' field should divided into 2 parts: hint interpretation phase and reasoning phase. 
-    - In hint interpretation phase, you should interpret basic meaning(the Allen relation, or relative length, or order of start and end points of the 2 events that can be judged.) of all hints one by one. 
+    - In hint interpretation phase, you should interpret basic meaning(the Allen relation, or relative length, or order of start and end points of the 2 events that can be judged.) of all hints one by one. (Remember "one by one")
     - In reasoning phase, you should provide thinking process bases on information from the hint interpretation phase.
 2. In 'thinking' field, use '1. Hint Interpretation Phase: hint1: xxx, hint2: xxx, ... 2. Reasoning Phase: ...' format.
 """

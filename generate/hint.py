@@ -171,12 +171,12 @@ HINT_TEMPLATES = {
     "D": [
         "'{event_l}' starts before '{event_r}' starts and ends after '{event_r}' ends.",
         "The duration of '{event_r}' is part of the duration of '{event_l}' and their start time and end time are different.",
-        "During '{event_l}', '{event_r}' started and ended.",
+        "During '{event_l}', '{event_r}' started and ended and their start time and end time are different.",
     ],
     "d": [
         "'{event_l}' starts after '{event_r}' starts and ends before '{event_r}' ends.",
         "The duration of '{event_l}' is part of the duration of '{event_r}' and their start time and end time are different.",
-        "During '{event_r}', '{event_l}' started and ended.",
+        "During '{event_r}', '{event_l}' started and ended and their start time and end time are different.",
     ],
     "s": [
         "'{event_l}' starts exactly when '{event_r}' starts and ends before '{event_r}' ends.",

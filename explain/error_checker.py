@@ -372,13 +372,13 @@ def verify_sample(sample, model: str) -> Dict[str, Any]:
     print(f"[debug] Verifying sample {sample.get('id')} with model {model}")
 
     nlu = judge_nlu(sample, model)
-    if nlu.get("ok") is not None and nlu.get("ok") is False:
+    if nlu.get("ok") is None:
+        sample["nlu_raw"] = nlu.get("raw", "")
+    elif nlu.get("ok") is False:
         print(f"[debug] NLU error detected for sample {sample.get('id')}")
         sample["error_type"] = "nlu_error"
         sample["error_description"] = nlu.get("error_description", "")
         return sample
-    else:
-        sample["nlu_raw"] = nlu.get("raw", "")
 
     reason = judge_thinking(sample, model)
     if reason.get("ok") is not None and reason.get("ok") is False:
