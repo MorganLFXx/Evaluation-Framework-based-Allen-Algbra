@@ -73,15 +73,13 @@ def item2fill(sample):
     return messages
 
 
-def item2question(sample, chat_type):
-    if chat_type == "single":
-        return item2single(sample)
-    elif chat_type == "conflict":
+def item2question(sample):
+    if "conflict_no" in sample["target"]:
         return item2conflict(sample)
-    elif chat_type == "fill":
+    elif "blank_object" in sample["target"]:
         return item2fill(sample)
     else:
-        raise ValueError(f"Unsupported chat type: {chat_type}")
+        return item2single(sample)
 
 
 def json_to_jsonl(name):
@@ -90,13 +88,7 @@ def json_to_jsonl(name):
     :param json_file_path: 输入的 JSON 文件路径
     :param jsonl_file_path: 输出的 JSONL 文件路径
     """
-    if name.endswith("conflict"):
-        chat_type = "conflict"
-    elif name.endswith("fillblank"):
-        chat_type = "fill"
-    else:
-        chat_type = "single"
-    json_file_path = f"datasets/{name}.json"
+    json_file_path = f"datasets/final3/{name}.json"
     jsonl_file_path = f"datasets/jsonl/{name}.jsonl"
     try:
         with open(json_file_path, "r", encoding="utf-8") as f:
@@ -109,13 +101,13 @@ def json_to_jsonl(name):
         with open(jsonl_file_path, "w", encoding="utf-8") as f:
             i = 0
             for item in json_data:
-                messages = item2question(item, chat_type)
+                messages = item2question(item)
                 transformed_item = {
                     "custom_id": i,
                     "method": "POST",
                     "url": "/v1/chat/completions",
                     "body": {
-                        "model": "qwen3.5-plus",
+                        "model": "qwen3.5-flash",
                         "messages": messages,
                         "temperature": 0,
                         "max_tokens": 55000,
@@ -135,7 +127,7 @@ def jsonl_to_json(name):
         f"datasets/answers/{name}_with_answers.jsonl", "r", encoding="utf-8"
     ) as f:
         data = [json.loads(line) for line in f]
-    with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
+    with open(f"datasets/final/{name}.json", "r", encoding="utf-8") as f:
         original_data = json.load(f)
     for item in data:
         custom_id = int(item["custom_id"])

@@ -61,11 +61,12 @@ def main():
     qa_parser.add_argument(
         "--mode",
         type=str,
-        choices=["answer_verify", "overlap_check", "model_error_overlap_check"],
+        choices=["answer_verify", "final_analyze"],
         default="answer_verify",
         help="运行模式",
     )
     qa_parser.add_argument("--name", type=str, help="校验的文件名")
+    qa_parser.add_argument("--model", type=str, help="校验使用的模型名称")
 
     error_parser = subparsers.add_parser("error", help="Error checker utilities")
     error_parser.add_argument(
@@ -212,6 +213,8 @@ def main():
     elif args.command == "qa":
         if args.mode == "answer_verify":
             qa_checker.answer_verify(args.name)
+        elif args.mode == "final_analyze":
+            qa_checker.final_task_analyze(args.name, args.model)
         else:
             raise ValueError(f"Unsupported mode: {args.mode}")
     elif args.command == "error":
