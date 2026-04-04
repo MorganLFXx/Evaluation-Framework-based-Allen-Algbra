@@ -1,4 +1,5 @@
 import json
+import re
 
 
 def single_check(sample):
@@ -8,21 +9,72 @@ def single_check(sample):
 
 
 def conflict_check(sample):
-    # judge answer_single is a int
-    # if not sample["answer_single"][0].strip().isdigit():
-    #     print("not digit")
-    #     return False
-    # answer = int(sample["answer_single"][0].strip())
     answer = sample["answer_single"][0]
     return answer == sample["target"]["conflict_no"]
+
+
+def _find_equality_term_pairs(text):
+    # Find complete terms around each '=' so we can swap left/right terms.
+    term_pattern = re.compile(r"(?:Start|End)\([A-Za-z]\d+\)")
+    term_matches = list(term_pattern.finditer(text))
+    if not term_matches:
+        return []
+
+    pairs = []
+    for idx, ch in enumerate(text):
+        if ch != "=":
+            continue
+
+        left = None
+        right = None
+        for m in term_matches:
+            if m.end() <= idx:
+                left = m
+            if m.start() >= idx and right is None:
+                right = m
+        if left and right:
+            pairs.append((left.span(), right.span()))
+    return pairs
+
+
+def _swap_by_spans(text, left_span, right_span):
+    ls, le = left_span
+    rs, re = right_span
+    if ls > rs:
+        ls, le, rs, re = rs, re, ls, le
+    left = text[ls:le]
+    right = text[rs:re]
+    return text[:ls] + right + text[le:rs] + left + text[re:]
+
+
+def _build_fill_answer_candidates(answer):
+    candidates = {answer}
+    pairs = _find_equality_term_pairs(answer)
+
+    # There are at most two '=' in this task.
+    pairs = pairs[:2]
+    if not pairs:
+        return candidates
+
+    for mask in range(1, 1 << len(pairs)):
+        candidate = answer
+        selected = [pairs[i] for i in range(len(pairs)) if (mask >> i) & 1]
+        # Apply from right to left so original spans remain valid.
+        selected.sort(key=lambda p: max(p[0][0], p[1][0]), reverse=True)
+        for left_span, right_span in selected:
+            candidate = _swap_by_spans(candidate, left_span, right_span)
+        candidates.add(candidate)
+    return candidates
 
 
 def fill_check(sample):
     candidates = list(sample["target"]["blank_candidate"])
     answer = sample["answer_single"][0].strip()
-    for c in candidates:
-        if answer in c:
-            return True
+    answer_candidates = _build_fill_answer_candidates(answer)
+    for a in answer_candidates:
+        for c in candidates:
+            if a in c:
+                return True
     return False
 
 
@@ -202,16 +254,28 @@ def main(mode="answer_verify", name=None, names=None, show=5):
 
 if __name__ == "__main__":
     # main(mode="answer_verify", name="sample")
-    candidates = [
-        "'O2' overlaps 'I3' or Start('O2') < Start('I3') < End('O2') < End('I3').",
-        "'O2' is finished by 'I3' or Start('O2') < Start('I3') < End('O2') = End('I3').",
-        "'O2' contains 'I3' or Start('O2') < Start('I3') < End('I3') < End('O2').",
-        "'O2' starts 'I3' or Start('O2') = Start('I3') < End('O2') < End('I3').",
-        "'O2' equals 'I3' or Start('O2') = Start('I3') < End('O2') = End('I3').",
-        "'O2' is started by 'I3' or Start('O2') = Start(''I3') < End('I3') < End('O2').",
-        "'O2' during 'I3' or Start('I3') < Start(''O2') < End('O2') < End('I3').",
-        "'O2' finishes 'I3' or Start('I3') < Start('O2') < End('O2') = End('I3').",
-        "'I3' overlaps 'O2' or Start('I3') < Start('O2') < End('I3') < End('O2').",
-    ]
-    for c in candidates:
-        pass
+    sample = {
+        "target": {
+            "l": 0,
+            "r": 1,
+            "rel": "D",
+            "blank_object": [0, 2],
+            "blank_candidate": [
+                " or Start(S2)<End(S2)=Start(T0)<End(T0).",
+                " or Start(S2)=Start(T0)<End(T0)<End(S2).",
+            ],
+        },
+        "events": ["T0", "U1", "S2"],
+        "hints": [
+            "'S2' starts before 'U1' starts and ends after 'U1' ends.",
+            "'T0' starts before 'U1' starts and ends after 'U1' ends.",
+        ],
+        "explanation": [
+            "'S2' contains 'U1' or Start(S2)<Start(U1)<End(U1)<End(S2).",
+            "'T0' contains 'U1' or Start(T0)<Start(U1)<End(U1)<End(T0).",
+        ],
+        "answer_single": ["Start(T0)=Start(S2)<End(T0)<End(S2)"],
+    }
+    print(fill_check(sample))
+
+    # m,M,f,F,s,S
