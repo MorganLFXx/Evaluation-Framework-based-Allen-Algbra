@@ -126,6 +126,13 @@ def generate_exclude_hint(excludes, l_no, r_no, events):
     for attr, value_to_func in hint.ATTRIBUTE_HINT.items():
         excluded_values = {hint.RELATION_DEFINITIONS[rel][attr] for rel in excludes}
         for value, attr_func in value_to_func.items():
+            # 特判: 如果要排除的关系的相对持续时间本就未知，那么使其持续关系已知不一定能引发冲突
+            if excludes[-1] in ["p", "P", "m", "M", "o", "O"] and value in [
+                Duration.SHORTER,
+                Duration.LONGER,
+                Duration.EQUAL,
+            ]:
+                continue
             if value not in excluded_values:
                 candidate_funcs.append(attr_func)
 
