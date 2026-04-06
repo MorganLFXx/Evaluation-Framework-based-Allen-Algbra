@@ -151,43 +151,57 @@ def analyze_samples(samples, name, expect_type=None):
     path_len_stats = {}
     total = 0
     right = 0
+    skip = 0
     for item in samples:
-        if "right" not in item:
-            continue
         ttype = task_type(item)
         if expect_type and ttype != expect_type:
             continue
+
         total += 1
-        check = 1 if item["right"] else 0
-        right += check
-        task_stats.setdefault(ttype, {"total": 0, "right": 0})
+        task_stats.setdefault(ttype, {"total": 0, "right": 0, "skip": 0})
         task_stats[ttype]["total"] += 1
-        task_stats[ttype]["right"] += check
+
         path_len = len(item.get("paths", []))
         path_len_stats.setdefault(ttype, {})
-        path_len_stats[ttype].setdefault(path_len, {"total": 0, "right": 0})
+        path_len_stats[ttype].setdefault(path_len, {"total": 0, "right": 0, "skip": 0})
         path_len_stats[ttype][path_len]["total"] += 1
+
+        if "right" not in item:
+            skip += 1
+            task_stats[ttype]["skip"] += 1
+            path_len_stats[ttype][path_len]["skip"] += 1
+            continue
+
+        check = 1 if item["right"] else 0
+        right += check
+        task_stats[ttype]["right"] += check
         path_len_stats[ttype][path_len]["right"] += check
 
     if total == 0:
         print(f"No samples to analyze for {name}")
         return
 
-    print(f"{name}: {right}/{total} = {right/total:.4f}")
+    valid_total = total - skip
+    acc = right / valid_total if valid_total else 0.0
+    print(f"{name}: {right}/{total} = {acc:.4f}, skip={skip}")
     print("Task stats:")
     for key in sorted(task_stats.keys()):
         t_total = task_stats[key]["total"]
         t_right = task_stats[key]["right"]
-        acc = t_right / t_total if t_total else 0.0
-        print(f"  {key}: {t_right}/{t_total} = {acc:.4f}")
+        t_skip = task_stats[key]["skip"]
+        t_valid = t_total - t_skip
+        acc = t_right / t_valid if t_valid else 0.0
+        print(f"  {key}: {t_right}/{t_total} = {acc:.4f}, skip={t_skip}")
     print("Path length stats (by task):")
     for ttype in sorted(path_len_stats.keys()):
         print(f"  {ttype}:")
         for key in sorted(path_len_stats[ttype].keys()):
             p_total = path_len_stats[ttype][key]["total"]
             p_right = path_len_stats[ttype][key]["right"]
-            acc = p_right / p_total if p_total else 0.0
-            print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}")
+            p_skip = path_len_stats[ttype][key]["skip"]
+            p_valid = p_total - p_skip
+            acc = p_right / p_valid if p_valid else 0.0
+            print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}, skip={p_skip}")
 
 
 def final_single_analyze(model, samples=None):
