@@ -10,6 +10,8 @@ def single_check(sample):
 
 def conflict_check(sample):
     answer = sample["answer_single"][0]
+    if isinstance(answer, str):
+        return answer.strip() == str(sample["target"]["conflict_no"])
     return answer == sample["target"]["conflict_no"]
 
 
@@ -70,6 +72,8 @@ def _build_fill_answer_candidates(answer):
 def fill_check(sample):
     candidates = list(sample["target"]["blank_candidate"])
     answer = sample["answer_single"][0].strip()
+    # 去除answer中的空格
+    answer = answer.replace(" ", "")
     answer_candidates = _build_fill_answer_candidates(answer)
     for a in answer_candidates:
         for c in candidates:
@@ -182,15 +186,15 @@ def analyze_samples(samples, name, expect_type=None):
         return
 
     valid_total = total - skip
-    acc = right / valid_total if valid_total else 0.0
+    acc = right / total if total else 0.0
     print(f"{name}: {right}/{total} = {acc:.4f}, skip={skip}")
     print("Task stats:")
     for key in sorted(task_stats.keys()):
         t_total = task_stats[key]["total"]
         t_right = task_stats[key]["right"]
         t_skip = task_stats[key]["skip"]
-        t_valid = t_total - t_skip
-        acc = t_right / t_valid if t_valid else 0.0
+        # t_valid = t_total - t_skip
+        acc = t_right / t_total if t_total else 0.0
         print(f"  {key}: {t_right}/{t_total} = {acc:.4f}, skip={t_skip}")
     print("Path length stats (by task):")
     for ttype in sorted(path_len_stats.keys()):
@@ -199,8 +203,8 @@ def analyze_samples(samples, name, expect_type=None):
             p_total = path_len_stats[ttype][key]["total"]
             p_right = path_len_stats[ttype][key]["right"]
             p_skip = path_len_stats[ttype][key]["skip"]
-            p_valid = p_total - p_skip
-            acc = p_right / p_valid if p_valid else 0.0
+            # p_valid = p_total - p_skip
+            acc = p_right / p_total if p_total else 0.0
             print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}, skip={p_skip}")
 
 
