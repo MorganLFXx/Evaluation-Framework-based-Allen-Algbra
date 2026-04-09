@@ -183,7 +183,8 @@ def fill_chat(sample, model):
 
 
 def process_sample(index, sample, chat_type, model):
-    print(f"== 正在处理第 {index + 1} 个用例 ==")
+    if (index + 1) % 5 == 0:
+        print(f"== 正在处理第 {index + 1} 个用例 ==")
     if chat_type == "single":
         return single_chat(sample, model)
     if chat_type == "conflict":
@@ -407,7 +408,7 @@ def main(name, chat_type, model, workers=1, hint="hint"):
     multi_thread_generate(samples, name, chat_type, model, workers)
 
     # 答案整合：所有线程都处理完后，输出最终答案文件
-    final_path = f"datasets/answers/{name}_with_answers.json"
+    final_path = f"datasets/answers/{name}_{model}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
 

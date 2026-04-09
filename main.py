@@ -252,7 +252,7 @@ def main():
             hint="hint",
         )
         # 3. 答案校验
-        right = qa_checker.answer_verify(args.name)
+        right = qa_checker.answer_verify(args.name + "_" + args.model)
         print(f"Answer verification completed. Correct answers: {right}")
         # 4. 错误校验(暂时跳过)
         if not args.skip_error_check:
