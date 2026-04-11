@@ -379,7 +379,8 @@ def multi_thread_generate(samples, name, chat_type, model, workers):
                         "index": index,
                         "skipped": True,
                         "error": str(e),
-                        "data": answers,
+                        "sample": samples[index],
+                        # "data": answers,
                     }
                 )
                 _atomic_dump_json(thread_out_path, thread_results)
