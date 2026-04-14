@@ -288,8 +288,7 @@ def _build_tips(sample):
     return tips
 
 
-def judge_nlu(sample, model):
-    print(f"[debug] Judging NLU for sample {sample.get('id')} with model {model}")
+def _build_judge_nlu_msg(sample):
     hints = sample.get("hints", []) or []
     explanations = sample.get("explanation", []) or []
     thinking = sample.get("thinking", "") or ""
@@ -338,6 +337,12 @@ def judge_nlu(sample, model):
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
+    return messages
+
+
+def judge_nlu(sample, model):
+    print(f"[debug] Judging NLU for sample {sample.get('id')} with model {model}")
+    messages = _build_judge_nlu_msg(sample)
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
         print(f"[debug] NLU judge parse failed for sample {sample.get('id')}")
@@ -348,14 +353,19 @@ def judge_nlu(sample, model):
     return parsed
 
 
-def judge_thinking(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
+def _build_judge_thinking_msg(sample):
     system = allen_helper
     tips = _build_tips(sample)
-    path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": tips},
     ]
+    return messages
+
+
+def judge_thinking(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
+    messages = _build_judge_thinking_msg(sample)
+    path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
         print(f"[debug] Thinking judge parse failed for sample {sample.get('id')}")
@@ -370,26 +380,25 @@ def judge_thinking(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
 
 def verify_sample(sample, model: str) -> Dict[str, Any]:
     print(f"[debug] Verifying sample {sample.get('id')} with model {model}")
-
+    sample["error_type"] = 0
     nlu = judge_nlu(sample, model)
     if nlu.get("ok") is None:
         sample["nlu_raw"] = nlu.get("raw", "")
     elif nlu.get("ok") is False:
         print(f"[debug] NLU error detected for sample {sample.get('id')}")
-        sample["error_type"] = "nlu_error"
-        sample["error_description"] = nlu.get("error_description", "")
-        return sample
+        sample["error_type"] += 1
+        sample["nlu_error_description"] = nlu.get("error_description", "")
+        # return sample
 
     reason = judge_thinking(sample, model)
     if reason.get("ok") is not None and reason.get("ok") is False:
         print(f"[debug] Reasoning error detected for sample {sample.get('id')}")
-        sample["error_type"] = "reasoning_error"
-        sample["error_description"] = reason.get("error_description", "")
+        sample["error_type"] += 2
+        sample["reasoning_error_description"] = reason.get("error_description", "")
     else:
         print(
             f"[debug] Reasoning uncertain for sample {sample.get('id')}, ok={reason.get('ok')}"
         )
-        sample["error_type"] = "unknown"
         sample["reasoning_raw"] = reason.get("raw", "")
     sample["path_tree"] = reason.get("path_tree", [])
 
@@ -486,9 +495,9 @@ def main(path, workers=1, model="qwen3.5-plus"):
                 }
             )
             _atomic_dump_json(worker_out_path, local_results)
-            if result["error_type"] == "nlu_error":
+            if result["error_type"] & 1:
                 local_nlu += 1
-            elif result["error_type"] == "reasoning_error":
+            elif result["error_type"] & 2:
                 local_reason += 1
 
         final_results = []
@@ -522,11 +531,12 @@ def main(path, workers=1, model="qwen3.5-plus"):
 
     merged_results.sort(key=lambda item: item[0])
     report_samples = [item[1] for item in merged_results]
+    write_samples = [item for item in report_samples if "error_type" in item]
 
     with open(
         f"datasets/explain/{path}_with_explanation.json", "w", encoding="utf-8"
     ) as f:
-        json.dump(report_samples, f, ensure_ascii=False, indent=4)
+        json.dump(write_samples, f, ensure_ascii=False, indent=4)
 
     # 删除临时文件夹
     shutil.rmtree(temp_dir)
