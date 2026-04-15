@@ -173,26 +173,25 @@ def _separate_thinking(thinking: str) -> Tuple[str, str]:
 def _build_tips(sample):
     thinking = sample.get("thinking", "") or ""
     hints = sample.get("hints", []) or []
-    explanations = sample.get("explanation", []) or []
     if "blank_object" in sample["target"]:
         path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
     else:
         path_lines = build_bottom_up_path_summaries(sample["paths"], sample["events"])
+    thinking_reasoning = _separate_thinking(thinking)[1]
 
     user = (
         "Return JSON only. Schema: "
         '{"ok": bool, "error_description": string}. '
         "'error_description' means the brief summary of error you found"
         "Note: model thinking may be truncated due to token limit. If you don't find any issues in the existing content, return ok=false and error_description: 'Thinking content is truncated. No error found in existing content'."
-        "Hints and explanations:\n"
-        + "\n".join(
-            [
-                f"- Hint {i+1}: {h} | Explanation: {e}"
-                for i, (h, e) in enumerate(zip(hints, explanations))
-            ]
-        )
-        + "\nModel thinking:\n"
-        + thinking
+        # "Hints and explanations:\n"
+        # + "\n".join(
+        #     [
+        #         f"- Hint {i+1}: {h} | Explanation: {e}"
+        #         for i, (h, e) in enumerate(zip(hints, explanations))
+        #     ]
+        # )
+        + "\nModel thinking:\n" + thinking_reasoning
     )
     if "blank_object" in sample["target"]:
         fill_tips = (
@@ -350,6 +349,8 @@ def judge_nlu(sample, model):
             "ok": None,
             "raw": raw,
         }
+    parsed["messages"] = messages
+    parsed["raw"] = raw
     return parsed
 
 
@@ -363,8 +364,25 @@ def _build_judge_thinking_msg(sample):
     return messages
 
 
-def judge_thinking(sample: Dict[str, Any], model: str) -> Dict[str, Any]:
-    messages = _build_judge_thinking_msg(sample)
+def _build_judge_thinking_followup_msg(
+    sample: Dict[str, Any],
+    nlu_messages: List[Dict[str, str]],
+    nlu_raw: str,
+) -> List[Dict[str, str]]:
+    """Build a multi-turn follow-up message list for reasoning check after NLU check."""
+
+    return [
+        *nlu_messages,
+        {"role": "assistant", "content": nlu_raw},
+        {"role": "user", "content": _build_tips(sample)},
+    ]
+
+
+def judge_thinking(
+    sample: Dict[str, Any], model: str, messages: Optional[List[Dict[str, str]]] = None
+) -> Dict[str, Any]:
+    if messages is None:
+        messages = _build_judge_thinking_msg(sample)
     path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
     parsed, raw = _call_llm_json(messages, model)
     if parsed is None:
@@ -388,9 +406,12 @@ def verify_sample(sample, model: str) -> Dict[str, Any]:
         print(f"[debug] NLU error detected for sample {sample.get('id')}")
         sample["error_type"] += 1
         sample["nlu_error_description"] = nlu.get("error_description", "")
-        # return sample
 
-    reason = judge_thinking(sample, model)
+    # Round 2: Reasoning check follows the NLU dialogue history.
+    thinking_messages = _build_judge_thinking_followup_msg(
+        sample, nlu.get("messages", []), nlu.get("raw")
+    )
+    reason = judge_thinking(sample, model, messages=thinking_messages)
     if reason.get("ok") is not None and reason.get("ok") is False:
         print(f"[debug] Reasoning error detected for sample {sample.get('id')}")
         sample["error_type"] += 2
@@ -532,6 +553,13 @@ def main(path, workers=1, model="qwen3.5-plus"):
     merged_results.sort(key=lambda item: item[0])
     report_samples = [item[1] for item in merged_results]
     write_samples = [item for item in report_samples if "error_type" in item]
+    for item in write_samples:
+        del item["paths"]
+        del item["hints"]
+        if "explanation" in item:
+            del item["explanation"]
+        if "explanations" in item:
+            del item["explanations"]
 
     with open(
         f"datasets/explain/{path}_with_explanation.json", "w", encoding="utf-8"
