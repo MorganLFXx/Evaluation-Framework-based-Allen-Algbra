@@ -98,19 +98,30 @@ Note:
 """
 
 
+def explain_extract(explanation):
+    # "'{event_l}' equals '{event_r}' or Start({event_l})=Start({event_r})<End({event_l})=End({event_r}).", pattern
+    # only extract the part after 'or'
+    return explanation.split("or")[-1].strip()
+
+
 def single_chat(sample, model):
     l = sample["target"]["l"]
     r = sample["target"]["r"]
     answers = []
     hints = sample["hints"]
+    explanation = sample["explanation"]
     question = (
         "Please help me determine the allen relationship between "
         f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information."
     )
-    # question += post_question + "\n"
-    question += detail_post_question + "\n"
+    question += post_question + "\n"
+    # question += detail_post_question + "\n"
     for i in range(len(hints)):
-        question += f"{i+1}.{hints[i]}\n"
+        # question += f"{i+1}.{hints[i]}\n"
+        if "Start(" in explanation[i] and "End(" in explanation[i]:
+            question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        else:
+            question += f"{i+1}.{explanation[i]}\n"
 
     messages = [
         {"role": "system", "content": allen_helper},
@@ -135,10 +146,15 @@ def conflict_chat(sample, model):
     )
     answers = []
     hints = sample["hints"]
+    explanation = sample["explanations"]
     for i in range(len(hints)):
-        question += f"{i+1}.{hints[i]}\n"
-    question += detail_post_question_conflict + "\n"
-    # question += post_question_conflict + "\n"
+        # question += f"{i+1}.{hints[i]}\n"
+        if "Start(" in explanation[i] and "End(" in explanation[i]:
+            question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        else:
+            question += f"{i+1}.{explanation[i]}\n"
+    # question += detail_post_question_conflict + "\n"
+    question += post_question_conflict + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
@@ -162,11 +178,16 @@ def fill_chat(sample, model):
         f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
         f"Based on the existing hints, please describe the order of the start and end time points of {event_l} and {event_r}."
     )
+    explanation = sample["explanation"]
     hints = sample["hints"]
     for i in range(len(hints)):
-        question += f"{i+1}.{hints[i]}\n"
-    question += detail_post_question_fill + "\n"
-    # question += post_question_fill + "\n"
+        # question += f"{i+1}.{hints[i]}\n"
+        if "Start(" in explanation[i] and "End(" in explanation[i]:
+            question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        else:
+            question += f"{i+1}.{explanation[i]}\n"
+    # question += detail_post_question_fill + "\n"
+    question += post_question_fill + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
