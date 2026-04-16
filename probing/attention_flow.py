@@ -224,13 +224,12 @@ class AttentionFlowExtractor:
         }
 
 
-def _extract_flow_for_prompt(
+def _extract_flow_for_extracted(
     prompt_text: str,
     rels: Sequence[Tuple[str, str, str]],
-    extractor: AttentionFlowExtractor,
+    extracted: Dict,
     layer_idx: int,
 ) -> Dict:
-    extracted = extractor.extract_attention(prompt_text)
     layer_attn = extracted["attentions"][layer_idx]
     offsets = extracted["offset_mapping"]
 
@@ -342,8 +341,6 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
         sample = example
 
     extractor = AttentionFlowExtractor(config)
-    num_layers = int(extractor.model.config.num_hidden_layers)
-    layer_idx = _normalize_layer_index(config.layer, num_layers)
 
     random.seed(config.seed)
     messages_control = build_question(sample, shuffle=False)
@@ -358,8 +355,28 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
     rels = get_whole_rels(sample, conflict_pairs)
     rels = [(l, r, rel) for l, r, rel in rels]
 
-    control = _extract_flow_for_prompt(prompt_control, rels, extractor, layer_idx)
-    treatment = _extract_flow_for_prompt(prompt_treat, rels, extractor, layer_idx)
+    extracted_control = extractor.extract_attention(prompt_control)
+    num_layers = int(extracted_control["num_layers"])
+    layer_idx = _normalize_layer_index(config.layer, num_layers)
+
+    extracted_treat = extractor.extract_attention(prompt_treat)
+    if int(extracted_treat["num_layers"]) != num_layers:
+        raise RuntimeError(
+            "Attention layer count mismatch between control and treatment"
+        )
+
+    control = _extract_flow_for_extracted(
+        prompt_control,
+        rels,
+        extracted_control,
+        layer_idx,
+    )
+    treatment = _extract_flow_for_extracted(
+        prompt_treat,
+        rels,
+        extracted_treat,
+        layer_idx,
+    )
 
     num_heads = control["num_heads"]
     if num_heads != treatment["num_heads"]:
