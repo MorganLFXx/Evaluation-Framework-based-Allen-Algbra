@@ -13,6 +13,7 @@ from probing.conflict_detect_example import (
     build_question,
     get_whole_rels,
     locate_conflict,
+    get_key_rels,
 )
 
 
@@ -350,9 +351,7 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
     prompt_control = extractor.render_messages(messages_control)
     prompt_treat = extractor.render_messages(messages_treat)
 
-    conflict_pairs = locate_conflict(sample)
-    conflict_pairs = [(l, r, rel) for l, r, rel in conflict_pairs[1:]]
-    rels = get_whole_rels(sample, conflict_pairs)
+    rels = get_key_rels(sample)
     rels = [(l, r, rel) for l, r, rel in rels]
 
     extracted_control = extractor.extract_attention(prompt_control)
