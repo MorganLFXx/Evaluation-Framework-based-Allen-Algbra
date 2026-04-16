@@ -430,7 +430,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Attention flow analysis for event pairs with shuffled prompts"
     )
-    parser.add_argument("--model-path", type=str, required=True, help="HF model path")
+    model_path = "/data/zhk/models/qwen-3.5-9b"
     parser.add_argument("--dataset-path", type=str, help="Dataset JSON path")
     parser.add_argument(
         "--sample-index",
@@ -490,7 +490,7 @@ def main():
     args = parser.parse_args()
 
     cfg = AttentionFlowConfig(
-        model_path=args.model_path,
+        model_path=model_path,
         dataset_path=args.dataset_path,
         sample_index=args.sample_index,
         output_dir=args.output_dir,
