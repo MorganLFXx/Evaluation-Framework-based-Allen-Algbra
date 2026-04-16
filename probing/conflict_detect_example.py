@@ -388,16 +388,20 @@ def get_key_rels(sample):
     for root in roots:
         dfs(root)
 
-    # remove root node groups after collection
+    # remove root node groups after collection, then flatten
     key_rel_groups = [
         group for node_idx, group in key_rel_groups if node_idx not in roots
     ]
-    return key_rel_groups
+
+    flat_rels = []
+    for group in key_rel_groups:
+        flat_rels.extend(group)
+
+    return flat_rels
 
 
 def main():
-    conflict_pairs = locate_conflict(example)
-    print(get_whole_rels(example, conflict_pairs))
+    print(get_key_rels(example))
 
 
 if __name__ == "__main__":

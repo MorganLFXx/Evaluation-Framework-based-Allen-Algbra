@@ -13,6 +13,7 @@ from probing.conflict_detect_example import (
     build_question,
     get_whole_rels,
     locate_conflict,
+    get_key_rels,
 )
 
 
@@ -350,9 +351,7 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
     prompt_control = extractor.render_messages(messages_control)
     prompt_treat = extractor.render_messages(messages_treat)
 
-    conflict_pairs = locate_conflict(sample)
-    conflict_pairs = [(l, r, rel) for l, r, rel in conflict_pairs[1:]]
-    rels = get_whole_rels(sample, conflict_pairs)
+    rels = get_key_rels(sample)
     rels = [(l, r, rel) for l, r, rel in rels]
 
     extracted_control = extractor.extract_attention(prompt_control)
@@ -448,11 +447,12 @@ def main():
         description="Attention flow analysis for event pairs with shuffled prompts"
     )
     model_path = "/data/zhk/models/qwen-3.5-9b"
-    parser.add_argument("--dataset-path", type=str, help="Dataset JSON path")
+    # parser.add_argument("--dataset-path", type=str, help="Dataset JSON path")
+    dataset_path = "datasets/final6/test_10_final_conflict.json"
     parser.add_argument(
         "--sample-index",
         type=int,
-        default=0,
+        default=2,
         help="Sample index inside dataset",
     )
     parser.add_argument(
@@ -508,7 +508,7 @@ def main():
 
     cfg = AttentionFlowConfig(
         model_path=model_path,
-        dataset_path=args.dataset_path,
+        dataset_path=dataset_path,
         sample_index=args.sample_index,
         output_dir=args.output_dir,
         device=args.device,
