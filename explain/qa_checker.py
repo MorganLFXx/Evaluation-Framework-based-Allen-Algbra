@@ -1,229 +1,107 @@
 import json
-import argparse
-import csv
+import re
 
 
-def sample_check(sample):
+def single_check(sample):
     if sample["answer_single"][0].strip().startswith("<think>"):
         return False
     return sample["answer_single"][0].strip() == sample["target"]["rel"]
 
 
-def model_error_overlap_check():
-    """
-    比较不同模型在相同数据集上的错误重叠度。
-    1) 输入多个文件名（不含 _with_answers.json）
-    2) 样例仅包含 target 和 answer
-    3) 不同文件中相同 id 表示同一问题
-    """
-    parser = argparse.ArgumentParser(
-        description="Check overlap of model errors on the same dataset"
-    )
-    parser.add_argument(
-        "--names",
-        nargs="+",
-        required=True,
-        help="待校验的数据集文件名（不含 _with_answers.json）",
-    )
-    parser.add_argument(
-        "--show",
-        type=int,
-        default=5,
-        help="每组重合样例最多展示的数量",
-    )
-    args = parser.parse_args()
-
-    def normalize_answer_tokens(answer):
-        if answer is None:
-            return []
-        text = str(answer).strip()
-        if not text or text.startswith("<think>"):
-            return []
-        text = text.replace(",", " ")
-        tokens = [t.strip() for t in text.split() if t.strip()]
-        return tokens
-
-    def answer_display(tokens):
-        if not tokens:
-            return "None"
-        if len(tokens) == 1:
-            return tokens[0]
-        return ",".join(tokens)
-
-    error_sets = {}
-    error_details = {}
-
-    for name in args.names:
-        with open(
-            f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8"
-        ) as f:
-            data = json.load(f)
-
-        current_errors = {}
-        for idx, item in enumerate(data):
-            target = item.get("target", {}).get("rel")
-            raw_answer = None
-            if "answer_single" in item and item["answer_single"]:
-                raw_answer = item["answer_single"][0]
-
-            tokens = normalize_answer_tokens(raw_answer)
-            is_correct = len(tokens) == 1 and tokens[0] == target
-            if not is_correct:
-                sample_id = item.get("id", idx)
-                current_errors[sample_id] = {
-                    "id": sample_id,
-                    "target": target,
-                    "answer": answer_display(tokens),
-                }
-
-        error_sets[name] = set(current_errors.keys())
-        error_details[name] = current_errors
-        print(f"{name}: errors {len(current_errors)}/{len(data)}")
-
-    names = list(error_sets.keys())
-    if len(names) < 2:
-        print("需要至少两个数据集才能计算重合情况。")
-        return
-
-    print("\nPairwise overlap:")
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            left, right = names[i], names[j]
-            overlap = error_sets[left] & error_sets[right]
-            print(f"{left} & {right}: {len(overlap)}")
-            if args.show > 0 and overlap:
-                for sample_id in list(overlap)[: args.show]:
-                    info = error_details[left].get(sample_id) or error_details[
-                        right
-                    ].get(sample_id)
-                    print(
-                        f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-                    )
-
-    common = set.intersection(*(error_sets[name] for name in names))
-    print(f"\nCommon overlap (all models): {len(common)}")
-    if args.show > 0 and common:
-        for sample_id in list(common)[: args.show]:
-            info = error_details[names[0]].get(sample_id)
-            if info is None:
-                continue
-            print(
-                f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-            )
+def conflict_check(sample):
+    answer = sample["answer_single"][0]
+    if isinstance(answer, str):
+        return answer.strip() == str(sample["target"]["conflict_no"])
+    return answer == sample["target"]["conflict_no"]
 
 
-def overlap_check():
-    """
-    得到的每个数据集的错误信息如下，包括其中每个错误样例的target和answer：
-            错误样例: target=D, answer=o,F,D
-            错误样例: target=o, answer=o, F, D
-            错误样例: target=O, answer=d, f, O
-            错误样例: target=F, answer=D F
-            错误样例: target=D, answer=p m
-            错误样例: target=O, answer=d,f,O
-    我希望检查不同数据集的错误结果的重合情况，看看是否有一些特别难的样例在不同数据集中都出现了错误。
-    注：请注意，target的格式是标准的，但answer的格式可能会有一些差异，比如有的用逗号分隔，有的用空格分隔，有的答案前后有空格等，请你注意排除这一影响。
-    """
-    parser = argparse.ArgumentParser(
-        description="Check overlap of error samples across datasets"
-    )
-    parser.add_argument(
-        "--names",
-        nargs="+",
-        required=True,
-        help="待校验的数据集文件名（不含 _with_answers.json）",
-    )
-    parser.add_argument(
-        "--show",
-        type=int,
-        default=5,
-        help="每组重合样例最多展示的数量",
-    )
-    args = parser.parse_args()
+def _find_equality_term_pairs(text):
+    # Find complete terms around each '=' so we can swap left/right terms.
+    term_pattern = re.compile(r"(?:Start|End)\([A-Za-z]\d+\)")
+    term_matches = list(term_pattern.finditer(text))
+    if not term_matches:
+        return []
 
-    def normalize_answer_tokens(answer):
-        if answer is None:
-            return []
-        text = str(answer).strip()
-        if not text or text.startswith("<think>"):
-            return []
-        text = text.replace(",", " ")
-        tokens = [t.strip() for t in text.split() if t.strip()]
-        return tokens
+    pairs = []
+    for idx, ch in enumerate(text):
+        if ch != "=":
+            continue
 
-    def answer_display(tokens):
-        if not tokens:
-            return "None"
-        if len(tokens) == 1:
-            return tokens[0]
-        return ",".join(tokens)
+        left = None
+        right = None
+        for m in term_matches:
+            if m.end() <= idx:
+                left = m
+            if m.start() >= idx and right is None:
+                right = m
+        if left and right:
+            pairs.append((left.span(), right.span()))
+    return pairs
 
-    def sample_signature(item):
-        signature_payload = {
-            "target": item.get("target"),
-            "events": item.get("events"),
-            "paths": item.get("paths"),
-        }
-        return json.dumps(signature_payload, sort_keys=True, ensure_ascii=False)
 
-    error_sets = {}
-    error_details = {}
+def _swap_by_spans(text, left_span, right_span):
+    ls, le = left_span
+    rs, re = right_span
+    if ls > rs:
+        ls, le, rs, re = rs, re, ls, le
+    left = text[ls:le]
+    right = text[rs:re]
+    return text[:ls] + right + text[le:rs] + left + text[re:]
 
-    for name in args.names:
-        with open(
-            f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8"
-        ) as f:
-            data = json.load(f)
 
-        current_errors = {}
-        for idx, item in enumerate(data):
-            target = item.get("target", {}).get("rel")
-            raw_answer = None
-            if "answer_single" in item and item["answer_single"]:
-                raw_answer = item["answer_single"][0]
+def _build_fill_answer_candidates(answer):
+    candidates = {answer}
+    pairs = _find_equality_term_pairs(answer)
 
-            tokens = normalize_answer_tokens(raw_answer)
-            is_correct = len(tokens) == 1 and tokens[0] == target
-            if not is_correct:
-                sig = sample_signature(item)
-                current_errors[sig] = {
-                    "id": item.get("id", idx),
-                    "target": target,
-                    "answer": answer_display(tokens),
-                }
+    # There are at most two '=' in this task.
+    pairs = pairs[:2]
+    if not pairs:
+        return candidates
 
-        error_sets[name] = set(current_errors.keys())
-        error_details[name] = current_errors
-        print(f"{name}: errors {len(current_errors)}/{len(data)}")
+    for mask in range(1, 1 << len(pairs)):
+        candidate = answer
+        selected = [pairs[i] for i in range(len(pairs)) if (mask >> i) & 1]
+        # Apply from right to left so original spans remain valid.
+        selected.sort(key=lambda p: max(p[0][0], p[1][0]), reverse=True)
+        for left_span, right_span in selected:
+            candidate = _swap_by_spans(candidate, left_span, right_span)
+        candidates.add(candidate)
+    return candidates
 
-    names = list(error_sets.keys())
-    if len(names) < 2:
-        print("需要至少两个数据集才能计算重合情况。")
-        return
 
-    print("\nPairwise overlap:")
-    for i in range(len(names)):
-        for j in range(i + 1, len(names)):
-            left, right = names[i], names[j]
-            overlap = error_sets[left] & error_sets[right]
-            print(f"{left} & {right}: {len(overlap)}")
-            if args.show > 0 and overlap:
-                for sig in list(overlap)[: args.show]:
-                    info = error_details[left].get(sig) or error_details[right].get(sig)
-                    print(
-                        f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-                    )
+def fill_check(sample):
+    candidates = list(sample["target"]["blank_candidate"])
+    answer = sample["answer_single"][0].strip()
+    # 去除answer中的空格
+    answer = answer.replace(" ", "")
+    answer_candidates = _build_fill_answer_candidates(answer)
+    for a in answer_candidates:
+        for c in candidates:
+            if a in c:
+                return True
+    return False
 
-    common = set.intersection(*(error_sets[name] for name in names))
-    print(f"\nCommon overlap (all datasets): {len(common)}")
-    if args.show > 0 and common:
-        for sig in list(common)[: args.show]:
-            info = error_details[names[0]].get(sig)
-            if info is None:
-                continue
-            print(
-                f"  sample id={info['id']}, target={info['target']}, answer={info['answer']}"
-            )
+
+def sample_check(sample):
+    if "conflict_no" in sample["target"]:
+        return conflict_check(sample)
+    elif "blank_object" in sample["target"]:
+        return fill_check(sample)
+    else:
+        return single_check(sample)
+
+
+def task_type(sample):
+    if "conflict_no" in sample["target"]:
+        return "conflict"
+    if "blank_object" in sample["target"]:
+        return "fill"
+    return "single"
+
+
+model_problem = (
+    "I can not determine.(The model may be overthinking or the output is truncated.)"
+)
 
 
 def answer_verify(name):
@@ -232,93 +110,190 @@ def answer_verify(name):
     with open(f"datasets/answers/{name}_with_answers.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    has_checked = "right" in data[0]
+
     right = 0
+    skip = 0
     for item in data:
-        item["chose_right"] = item["right"]
+        if (
+            "answer_single" not in item
+            or len(item["answer_single"]) == 0
+            or item["answer_single"][0] == model_problem
+        ):
+            skip += 1
+            continue
         item["right"] = sample_check(item)
         check = 1 if item["right"] else 0
         right += check
-    json.dump(
-        data,
-        open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8"),
-        ensure_ascii=False,
-        indent=4,
+    if not has_checked:
+        json.dump(
+            data,
+            open(f"datasets/answers/{name}_with_answers.json", "w", encoding="utf-8"),
+            ensure_ascii=False,
+            indent=4,
+        )
+    # print(f"Get response error: {skip}")
+    print(
+        f"Skip: {skip}, Accuracy: {right}/{len(data)-skip} = {right/(len(data)-skip):.4f}"
     )
-    print(f"Accuracy: {right}/{len(data)} = {right/len(data):.4f}")
     return right
 
 
-def link_count():
-    right_map = {}
-    error_map = {}
-    new_test = []
-    with open(
-        f"datasets/answers/test_link_len_dsv32" + "_with_answers.json",
-        "r",
-        encoding="utf-8",
-    ) as f:
-        data = json.load(f)
-    for item in data:
-        check = 1 if sample_check(item) else 0
-        link_len = len(item["paths"])
-        if check == 0:
-            if len(item["paths"]) <= 3:
-                new_test.append(item)
-            answer = item["answer_single"][0].strip()
-            if answer.startswith("<think>"):
-                answer = "None"
-            path_info = f"{item['paths'][0]['path'][0]}{item['paths'][0]['path'][1]}"
-            print(
-                f"id {item['id']}: target={item['target']['rel']}, path={path_info}, answer={answer}, len={link_len}, right={item['right']}"
-            )
-        if item["right"]:
-            right_map[link_len] = right_map.get(link_len, 0) + check
-        else:
-            error_map[link_len] = error_map.get(link_len, 0) + check
-
-    for item in right_map.items():
-        link_len, correct = item
-        if link_len == 1:
-            total = 10
-        else:
-            total = 40
-        print(
-            f"Link Length {link_len}: Accuracy {correct}/{total} = {correct/total:.4f}"
-        )
-    for item in error_map.items():
-        link_len, correct = item
-        if link_len == 1:
-            total = 10
-        else:
-            total = 40
-        print(
-            f"Error Link Length {link_len}: Accuracy {correct}/{total} = {correct/total:.4f}"
+def _ensure_has_right(samples, name):
+    if not samples:
+        raise ValueError(f"No samples loaded for {name}")
+    has_right = any("right" in s for s in samples)
+    if not has_right:
+        raise ValueError(
+            f"Samples for {name} do not contain 'right'. Run answer_verify first."
         )
 
-    i = 0
-    for item in new_test:
-        del item["answer_single"]
-        item["id"] = i
-        i += 1
 
-    with open(f"datasets/test_link_len_error_qwen.json", "w", encoding="utf-8") as f:
-        json.dump(new_test, f, ensure_ascii=False, indent=4)
+def analyze_samples(samples, name, expect_type=None):
+    _ensure_has_right(samples, name)
+    task_stats = {}
+    path_len_stats = {}
+    total = 0
+    right = 0
+    skip = 0
+    for item in samples:
+        ttype = task_type(item)
+        if expect_type and ttype != expect_type:
+            continue
+
+        total += 1
+        task_stats.setdefault(ttype, {"total": 0, "right": 0, "skip": 0})
+        task_stats[ttype]["total"] += 1
+
+        path_len = len(item.get("paths", []))
+        path_len_stats.setdefault(ttype, {})
+        path_len_stats[ttype].setdefault(path_len, {"total": 0, "right": 0, "skip": 0})
+        path_len_stats[ttype][path_len]["total"] += 1
+
+        if "right" not in item:
+            skip += 1
+            task_stats[ttype]["skip"] += 1
+            path_len_stats[ttype][path_len]["skip"] += 1
+            continue
+
+        check = 1 if item["right"] else 0
+        right += check
+        task_stats[ttype]["right"] += check
+        path_len_stats[ttype][path_len]["right"] += check
+
+    if total == 0:
+        print(f"No samples to analyze for {name}")
+        return
+
+    valid_total = total - skip
+    acc = right / total if total else 0.0
+    print(f"{name}: {right}/{total} = {acc:.4f}, skip={skip}")
+    print("Task stats:")
+    for key in sorted(task_stats.keys()):
+        t_total = task_stats[key]["total"]
+        t_right = task_stats[key]["right"]
+        t_skip = task_stats[key]["skip"]
+        # t_valid = t_total - t_skip
+        acc = t_right / t_total if t_total else 0.0
+        print(f"  {key}: {t_right}/{t_total} = {acc:.4f}, skip={t_skip}")
+    print("Path length stats (by task):")
+    for ttype in sorted(path_len_stats.keys()):
+        print(f"  {ttype}:")
+        for key in sorted(path_len_stats[ttype].keys()):
+            p_total = path_len_stats[ttype][key]["total"]
+            p_right = path_len_stats[ttype][key]["right"]
+            p_skip = path_len_stats[ttype][key]["skip"]
+            # p_valid = p_total - p_skip
+            acc = p_right / p_total if p_total else 0.0
+            print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}, skip={p_skip}")
+
+
+def final_single_analyze(model, samples=None):
+    if samples is None:
+        # open path and load samples
+        path = f"datasets/answers/final_single_{model}_with_answers.json"
+        with open(path, "r", encoding="utf-8") as f:
+            samples = json.load(f)
+    analyze_samples(samples, f"final_single_{model}", expect_type="single")
+
+
+def final_conflict_analyze(model, samples=None):
+    if samples is None:
+        # open path and load samples
+        path = f"datasets/answers/final_conflict_{model}_with_answers.json"
+        with open(path, "r", encoding="utf-8") as f:
+            samples = json.load(f)
+    analyze_samples(samples, f"final_conflict_{model}", expect_type="conflict")
+
+
+def final_fill_analyze(model, samples=None):
+    if samples is None:
+        # open path and load samples
+        path = f"datasets/answers/final_fillblank_{model}_with_answers.json"
+        with open(path, "r", encoding="utf-8") as f:
+            samples = json.load(f)
+    analyze_samples(samples, f"final_fillblank_{model}", expect_type="fill")
+
+
+def final_all_analyze(model):
+    # final_all包含single,conflict,fill三类的分析，是一个总的集成
+    path = f"datasets/answers/final_all_{model}_with_answers.json"
+    with open(path, "r", encoding="utf-8") as f:
+        samples = json.load(f)
+    analyze_samples(samples, f"final_all_{model}")
+
+
+def final_task_analyze(name, model=None):
+    # 统一入口, 按照name分流
+    # name -> final_all, final_single, final_conflict, final_fill
+    if not name:
+        raise ValueError("name is required")
+    if not model:
+        raise ValueError("model is required")
+    if name == "final_all":
+        return final_all_analyze(model)
+    if name == "final_single":
+        return final_single_analyze(model)
+    if name == "final_conflict":
+        return final_conflict_analyze(model)
+    if name == "final_fill":
+        return final_fill_analyze(model)
+    raise ValueError(f"Unsupported name: {name}")
 
 
 def main(mode="answer_verify", name=None, names=None, show=5):
     if mode == "answer_verify":
         answer_verify(name)
-    # elif mode == "overlap_check":
-    #     overlap_check(names, show)
-    # elif mode == "model_error_overlap_check":
-    #     model_error_overlap_check(names, show)
+    elif mode == "final":
+        final_task_analyze(name)
     else:
         raise ValueError(f"Unsupported mode: {mode}")
-    # link_count()
-    # count()
-    # model_error_overlap_check()
-    # overlap_check()
 
 
 if __name__ == "__main__":
-    main(mode="answer_verify", name="sample")
+    # main(mode="answer_verify", name="sample")
+    sample = {
+        "target": {
+            "l": 0,
+            "r": 1,
+            "rel": "D",
+            "blank_object": [0, 2],
+            "blank_candidate": [
+                " or Start(S2)<End(S2)=Start(T0)<End(T0).",
+                " or Start(S2)=Start(T0)<End(T0)<End(S2).",
+            ],
+        },
+        "events": ["T0", "U1", "S2"],
+        "hints": [
+            "'S2' starts before 'U1' starts and ends after 'U1' ends.",
+            "'T0' starts before 'U1' starts and ends after 'U1' ends.",
+        ],
+        "explanation": [
+            "'S2' contains 'U1' or Start(S2)<Start(U1)<End(U1)<End(S2).",
+            "'T0' contains 'U1' or Start(T0)<Start(U1)<End(U1)<End(T0).",
+        ],
+        "answer_single": ["Start(T0)=Start(S2)<End(T0)<End(S2)"],
+    }
+    print(fill_check(sample))
+
+    # m,M,f,F,s,S

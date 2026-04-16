@@ -18,6 +18,8 @@ allenEnv/
 # dataset
 datasets/
 datas/
+outputs/
 
 # other
 check_real_event_relation.py
+/nohup*

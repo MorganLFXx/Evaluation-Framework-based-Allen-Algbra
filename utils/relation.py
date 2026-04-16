@@ -205,6 +205,32 @@ composition_table = {
 }
 
 
+def get_left_node(right_rel, target_rel) -> list:
+    """Given a right relation and a target relation, find the left relation that can compose with the right relation to get the target relation."""
+    accandidates = []
+    for (left_rel, r_rel), comp in composition_table.items():
+        if r_rel == right_rel and target_rel in comp:
+            accandidates.append(left_rel)
+    if len(accandidates) == 0:
+        raise ValueError(
+            f"No left relation found for right relation: {right_rel} and target relation: {target_rel}"
+        )
+    return accandidates
+
+
+def get_right_node(left_rel, target_rel) -> list:
+    """Given a left relation and a target relation, find the right relation that can compose with the left relation to get the target relation."""
+    accandidates = []
+    for (l_rel, right_rel), comp in composition_table.items():
+        if l_rel == left_rel and target_rel in comp:
+            accandidates.append(right_rel)
+    if len(accandidates) == 0:
+        raise ValueError(
+            f"No right relation found for left relation: {left_rel} and target relation: {target_rel}"
+        )
+    return accandidates
+
+
 def random_relation() -> str:
     """Generate a random Allen's interval relation."""
     import random
