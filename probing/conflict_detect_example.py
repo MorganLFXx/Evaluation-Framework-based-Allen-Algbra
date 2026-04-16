@@ -1,5 +1,7 @@
 import random
 
+from httpx import get
+
 from generate.generate_response import detail_post_question_conflict, allen_helper
 
 example = {
