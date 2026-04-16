@@ -310,6 +310,91 @@ def get_whole_rels(sample, conflict_pairs):
     return rels
 
 
+def get_key_rels(sample):
+    # 获取所有关键节点的关系组
+    # 关键节点：左子树或右子树至少有一个不是叶子节点的节点
+    # 记得除去根节点
+    events = sample.get("events", [])
+    paths = sample.get("paths", [])
+    if not events or not paths:
+        return []
+
+    def _is_leaf(node_idx):
+        if not (0 <= node_idx < len(paths)):
+            return True
+        node = paths[node_idx]
+        return node.get("left", -1) == -1 and node.get("right", -1) == -1
+
+    def _is_key_node(node_idx):
+        if not (0 <= node_idx < len(paths)):
+            return False
+        node = paths[node_idx]
+        left_idx = node.get("left", -1)
+        right_idx = node.get("right", -1)
+        return (left_idx != -1 and not _is_leaf(left_idx)) or (
+            right_idx != -1 and not _is_leaf(right_idx)
+        )
+
+    roots = {i for i, p in enumerate(paths) if p.get("parent", -1) == -1}
+    if not roots:
+        roots = {0}
+
+    key_rel_groups = []
+    visited = set()
+
+    def _append_group(node):
+        base = node.get("base_event", [])
+        path_rels = node.get("path", [])
+        new_event = node.get("new_event", -1)
+        target = node.get("target")
+
+        if len(base) != 2 or len(path_rels) != 2 or target is None:
+            return
+
+        l_base, r_base = int(base[0]), int(base[1])
+        new_event = int(new_event)
+        if not (
+            0 <= l_base < len(events)
+            and 0 <= r_base < len(events)
+            and 0 <= new_event < len(events)
+        ):
+            return
+
+        return [
+            (events[l_base], events[r_base], target),
+            (events[l_base], events[new_event], path_rels[0]),
+            (events[new_event], events[r_base], path_rels[1]),
+        ]
+
+    def dfs(node_idx):
+        if node_idx in visited or not (0 <= node_idx < len(paths)):
+            return
+        visited.add(node_idx)
+
+        node = paths[node_idx]
+        left_idx = node.get("left", -1)
+        right_idx = node.get("right", -1)
+
+        if left_idx != -1:
+            dfs(left_idx)
+        if right_idx != -1:
+            dfs(right_idx)
+
+        if _is_key_node(node_idx):
+            group = _append_group(node)
+            if group:
+                key_rel_groups.append((node_idx, group))
+
+    for root in roots:
+        dfs(root)
+
+    # remove root node groups after collection
+    key_rel_groups = [
+        group for node_idx, group in key_rel_groups if node_idx not in roots
+    ]
+    return key_rel_groups
+
+
 def main():
     conflict_pairs = locate_conflict(example)
     print(get_whole_rels(example, conflict_pairs))
