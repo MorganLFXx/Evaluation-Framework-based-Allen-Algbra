@@ -9,12 +9,7 @@ import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from probing.conflict_detect_example import (
-    build_question,
-    get_whole_rels,
-    locate_conflict,
-    get_key_rels,
-)
+from probing.conflict_detect_example import build_question, get_key_rels
 
 
 @dataclass
@@ -277,29 +272,10 @@ def _select_head_for_heatmap(
     return 0
 
 
-def _build_flow_matrix(
-    events: Sequence[str],
+def _plot_grouped_bars(
     rel_pairs: Sequence[Tuple[str, str]],
-    flows: Dict[Tuple[str, str], List[float]],
-    head_idx: int,
-) -> np.ndarray:
-    idx_map = {e: i for i, e in enumerate(events)}
-    mat = np.full((len(events), len(events)), np.nan, dtype=np.float32)
-    for e1, e2 in rel_pairs:
-        if (e1, e2) not in flows:
-            continue
-        i = idx_map.get(e1)
-        j = idx_map.get(e2)
-        if i is None or j is None:
-            continue
-        mat[i, j] = float(flows[(e1, e2)][head_idx])
-    return mat
-
-
-def _plot_heatmaps(
-    events: Sequence[str],
-    control_mat: np.ndarray,
-    treat_mat: np.ndarray,
+    control_vals: Sequence[float],
+    treat_vals: Sequence[float],
     output_path: str,
     title: str,
 ) -> None:
@@ -308,22 +284,21 @@ def _plot_heatmaps(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    vmax = np.nanmax([np.nanmax(control_mat), np.nanmax(treat_mat)])
-    vmin = np.nanmin([np.nanmin(control_mat), np.nanmin(treat_mat)])
+    labels = [f"{l}|{r}" for l, r in rel_pairs]
+    x = np.arange(len(labels))
+    width = 0.38
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6), constrained_layout=True)
-    for ax, mat, name in zip(axes, [control_mat, treat_mat], ["normal", "shuffled"]):
-        im = ax.imshow(mat, cmap="viridis", vmin=vmin, vmax=vmax)
-        ax.set_title(name)
-        ax.set_xticks(range(len(events)))
-        ax.set_yticks(range(len(events)))
-        ax.set_xticklabels(events, rotation=45, ha="right")
-        ax.set_yticklabels(events)
-        ax.set_xlabel("Event")
-        ax.set_ylabel("Event")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-
-    fig.suptitle(title)
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 0.5), 6))
+    ax.bar(x - width / 2, control_vals, width, label="normal")
+    ax.bar(x + width / 2, treat_vals, width, label="shuffled")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_xlabel("Event Pair")
+    ax.set_ylabel("Flow")
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+    fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
@@ -401,19 +376,17 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
         reverse=True,
     )[:top_k]
 
-    events = _build_event_list(rels)
-    rel_pairs = [(l, r) for l, r, _ in rels]
-
     head_idx = _select_head_for_heatmap(drop_by_head, config.head_for_heatmap)
-    control_mat = _build_flow_matrix(events, rel_pairs, control["flows"], head_idx)
-    treat_mat = _build_flow_matrix(events, rel_pairs, treatment["flows"], head_idx)
+    rel_pairs = [(l, r) for l, r, _ in rels]
+    control_vals = [control["flows"][pair][head_idx] for pair in rel_pairs]
+    treat_vals = [treatment["flows"][pair][head_idx] for pair in rel_pairs]
 
-    heatmap_path = os.path.join(config.output_dir, "attention_flow_heatmap.png")
-    _plot_heatmaps(
-        events,
-        control_mat,
-        treat_mat,
-        heatmap_path,
+    bar_path = os.path.join(config.output_dir, "attention_flow_bars.png")
+    _plot_grouped_bars(
+        rel_pairs,
+        control_vals,
+        treat_vals,
+        bar_path,
         title=f"Attention Flow (layer {layer_idx + 1}, head {head_idx})",
     )
 
@@ -431,8 +404,7 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
             }
             for pair in rel_pairs
         ],
-        "heatmap_path": heatmap_path,
-        "events": events,
+        "bar_path": bar_path,
     }
 
     report_path = os.path.join(config.output_dir, "attention_flow_report.json")
@@ -522,7 +494,7 @@ def main():
 
     report = run_attention_flow(cfg)
     print(f"Saved report to: {cfg.output_dir}/attention_flow_report.json")
-    print(f"Saved heatmap to: {report['heatmap_path']}")
+    print(f"Saved bar chart to: {report['bar_path']}")
 
 
 if __name__ == "__main__":
