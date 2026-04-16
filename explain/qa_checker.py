@@ -234,6 +234,7 @@ def answer_verify(name):
 
     right = 0
     for item in data:
+        item["chose_right"] = item["right"]
         item["right"] = sample_check(item)
         check = 1 if item["right"] else 0
         right += check

@@ -1,7 +1,8 @@
 import random
 import copy
 import json
-from utils.relation import random_relation, get_composition
+import generate
+from utils.relation import random_relation, get_composition, composition_table, full
 from utils.db import get_event_by_rel
 from generate.generate_hints import generate_hints
 
@@ -156,7 +157,7 @@ def generate_data(sample, hint_type):
     used_names = set(e for e in events if e != "")
     for i in range(len(events)):
         if events[i] == "":
-            events[i] = random_event_name(used_names)
+            events[i] = random_event_name(used_names) + str(i)
 
     hints, explanations = generate_hints(sample["paths"], events, hint_type)
     sample["hints"] = hints
@@ -188,17 +189,39 @@ def main(n, name, depth=1, hint="indirect pos"):
 
 def main_base():
     # 用于生成所有基本事件
-    with open("datas/all_base_samples.json", "r") as f:
-        samples = json.load(f)
-    for sample in samples:
-        events = sample["events"]
-        used_names = set(e for e in events if e != "")
-        for i in range(len(events)):
-            if events[i] == "":
-                events[i] = random_event_name(used_names)
-        sample = generate_data(sample, hint_type="direct neg")
-    with open("datasets/test_base_neg.json", "w") as f:
-        json.dump(samples, f, indent=4, ensure_ascii=False)
+    id = 0
+    datas = []
+    for pair in composition_table.items():
+        key, value = pair
+        if value == full:
+            continue
+        rel1, rel2 = key
+        for rel in value:
+            events = ["", "", ""]
+            target = {"l": 0, "r": 1, "rel": rel}
+            excluded = [r for r in value if r != rel]
+            new_path = {
+                "target": rel,
+                "path": [rel1, rel2],
+                "excluded": excluded,
+                "parent": -1,
+                "left": -1,
+                "right": -1,
+                "base_event": [0, 1],
+                "new_event": 2,
+            }
+            sample = {
+                "id": id,
+                "target": target,
+                "events": events,
+                "paths": [new_path],
+            }
+            id += 1
+            data = generate_data(sample, "indirect pos")
+            datas.append(data)
+    print(f"Generated {len(datas)} base samples.")
+    with open("datasets/test_bases.json", "w") as f:
+        json.dump(datas, f, indent=4, ensure_ascii=False)
 
 
 def main_link_length():
@@ -301,10 +324,10 @@ def main_link_length():
 
 if __name__ == "__main__":
     # general sample
-    main(n=1, name="sample", depth=1, hint="direct neg")
+    # main(n=1, name="sample", depth=1, hint="direct neg")
     # all real base sample
     # main_all_real()
     # all base samples
-    # main_base()
+    main_base()
     # link length samples
     # main_link_length()
