@@ -351,7 +351,8 @@ def run_attention_flow(config: AttentionFlowConfig) -> Dict:
     prompt_control = extractor.render_messages(messages_control)
     prompt_treat = extractor.render_messages(messages_treat)
 
-    rels = get_key_rels(sample)
+    # rels = get_key_rels(sample)
+    rels = get_whole_rels(sample)
     rels = [(l, r, rel) for l, r, rel in rels]
 
     extracted_control = extractor.extract_attention(prompt_control)

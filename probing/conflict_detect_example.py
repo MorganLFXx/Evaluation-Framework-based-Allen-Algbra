@@ -236,7 +236,7 @@ def locate_conflict(sample):
     return pairs
 
 
-def get_whole_rels(sample, conflict_pairs):
+def get_whole_rels(sample, conflict_pairs=[]):
     """
     将 paths 二叉树中的关系全部展开为 (left_event, right_event, rel) 三元组。
 
