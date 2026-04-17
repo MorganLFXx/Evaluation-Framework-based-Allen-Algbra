@@ -23,9 +23,10 @@ Note: Allen relation can be converted to timeline. Each one indicates unique seq
 
 post_question = """
 For each hint, you should carefully consider how to interpret and only start reasoning after all hints have been interpreted. 
-You should thoughtfully consider the answer, noting how each hint influences your reasoning, 
-before finally answering with the abbreviations of final answer. 
-Only give the abbreviation of the final answer. There is only one correct answer. But if you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'.
+Output ONLY JSON with fields: \n
+{
+    "answer_single": "the abbreviation of the final answer. There is only one correct answer. But if you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'.
+}
 Note: Just give the final answer(the abbreviation of the allen relation), don't explain how you get the answer.
 """
 
