@@ -115,14 +115,14 @@ def single_chat(sample, model):
         "Please help me determine the allen relationship between "
         f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information."
     )
-    question += post_question + "\n"
-    # question += detail_post_question + "\n"
+    # question += post_question + "\n"
+    question += detail_post_question + "\n"
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
 
     messages = [
         {"role": "system", "content": allen_helper},
@@ -149,13 +149,13 @@ def conflict_chat(sample, model):
     hints = sample["hints"]
     explanation = sample["explanations"]
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
-    # question += detail_post_question_conflict + "\n"
-    question += post_question_conflict + "\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
+    question += detail_post_question_conflict + "\n"
+    # question += post_question_conflict + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
@@ -182,13 +182,13 @@ def fill_chat(sample, model):
     explanation = sample["explanation"]
     hints = sample["hints"]
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
-    # question += detail_post_question_fill + "\n"
-    question += post_question_fill + "\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
+    question += detail_post_question_fill + "\n"
+    # question += post_question_fill + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
