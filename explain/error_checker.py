@@ -172,6 +172,8 @@ def _separate_thinking(thinking: str) -> Tuple[str, str]:
 
 def _build_tips(sample):
     thinking = sample.get("thinking", "") or ""
+    answer = sample.get("answer_single", [""]) or [""]
+    answer = answer[0]
     hints = sample.get("hints", []) or []
     if "blank_object" in sample["target"]:
         path_lines = build_top_down_path_summaries(sample["paths"], sample["events"])
@@ -210,7 +212,7 @@ def _build_tips(sample):
             + "The candidate standard answer for the blank object are:"
             + "\n".join([f"- {opt}" for opt in sample["target"]["blank_candidate"]])
             + "Please analyze the common characteristics of these candidate hints that make the path valid."
-            + f"And then compare to your answer {sample["answer_single"][0]}"
+            + f"And then compare to your answer {answer}"
         )
         fill_tree = """
             Path tree (top-down order, follow the path tree step by step to check):
@@ -235,7 +237,8 @@ def _build_tips(sample):
             2. Analyze the thinking process to determine why the contradiction was not found whether you were misled somewhere or failed to realize that this point would give rise to a contradiction.
             """
             f"Standard answer: The conflict hint is hint {sample["target"]["conflict_no"]}:"
-            + f"{hints[sample['target']['conflict_no']-1]}"
+            + f"{hints[sample['target']['conflict_no']-1]}\n"
+            f"Your answer: {str(answer)}\n"
         )
         conflict_tree = """
             In the original question, I've told you 'All hints directly describe the relation between 2 events is absolutely correct.'
@@ -249,7 +252,9 @@ def _build_tips(sample):
         )
         tips = conflict_tips + user + conflict_tree
     else:
-        single_tips = """
+        single_tips = (
+            f"Your answer is {answer} between '{sample["events"][0]} and {sample["events"][1]}'.\n"
+            """
             Check whether any Reasoning Errors in LLM's thinking.
             Definition of Reasoning Error:
             A Reasoning Error occurs means LLM makes an incorrect inference while combining information from interpreted hints.
@@ -268,6 +273,7 @@ def _build_tips(sample):
             - Hallucinations occurring during reasoning lead to alterations in certain information.
             - Failing to derive a necessary intermediate relation or timeline. 
         """
+        )
         single_tree = """
             Path tree (bottom-up order, follow the path tree step by step to check):
             Note(How to use path tree):
@@ -486,7 +492,7 @@ def main(path, workers=1, model="qwen3.5-plus"):
         for index in range(start, end):
             sample = data[index]
             local_total += 1
-            if "right" not in sample:
+            if "right" not in sample or "thinking" not in sample:
                 # print(
                 #     f"[debug] Worker {worker_id + 1} sample {sample.get('id')} missing 'right' field, skipping"
                 # )
