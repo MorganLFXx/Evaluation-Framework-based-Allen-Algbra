@@ -1,19 +1,18 @@
 import argparse
 
-from probing.pipeline import Stage1Config, run_pipeline
+from probing.pipeline import ProbePipelineConfig, run_pipeline
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Two-stage probing pipeline (Stage1 + Stage3) for conflict detection reasoning"
+        description="Key-relation binary probing pipeline with control/treatment A/B statistics"
     )
     parser.add_argument(
         "--dataset",
         type=str,
-        default="debug_probe",
+        default="test_10_final",
         help="Path to conflict task dataset JSON",
     )
-    dataset_path = f"datasets/{args.dataset}.json"
     model_path = "/data/zhk/models/qwen-3.5-9b"
     # parser.add_argument(
     #     "--model-path",
@@ -27,7 +26,6 @@ def main():
     #     default="outputs/",
     #     help="Directory to save probing features and report",
     # )
-    output_dir = f"outputs/{args.dataset}"
     parser.add_argument(
         "--max-samples",
         type=int,
@@ -91,10 +89,12 @@ def main():
     )
 
     args = parser.parse_args()
-    cfg = Stage1Config(
+    dataset_path = f"datasets/final6/{args.dataset}.json"
+    output_dir = f"outputs/{args.dataset}"
+    cfg = ProbePipelineConfig(
         dataset_path=dataset_path,
         model_path=model_path,
-        output_dir=args.output_dir,
+        output_dir=output_dir,
         max_samples=args.max_samples,
         layer_spec=args.layer_spec,
         test_ratio=args.test_ratio,
@@ -109,8 +109,8 @@ def main():
     )
 
     report = run_pipeline(cfg)
-    print(f"Stage pipeline finished. records={report['num_records']}")
-    print(f"Report saved to: {cfg.output_dir}/stage1_report.json")
+    print(f"Probing pipeline finished. records={report['num_records']}")
+    print(f"Report saved to: {cfg.output_dir}/report.json")
 
 
 if __name__ == "__main__":

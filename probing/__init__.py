@@ -1,3 +1,3 @@
-# from probing.stage1_pipeline import Stage1Config, run_stage1_pipeline
+from probing.pipeline import ProbePipelineConfig, Stage1Config, run_pipeline
 
-# __all__ = ["Stage1Config", "run_stage1_pipeline"]
+__all__ = ["ProbePipelineConfig", "Stage1Config", "run_pipeline"]

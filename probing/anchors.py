@@ -61,6 +61,38 @@ def find_reasoning_phase_span(
     return (start, end)
 
 
+def find_relation_char_span(
+    prompt_text: str,
+    left_event: str,
+    right_event: str,
+) -> Optional[CharSpan]:
+    """Locate a robust character span for a relation anchor by event pair."""
+    cursor = 0
+    for line in prompt_text.splitlines(True):
+        start = cursor
+        end = cursor + len(line)
+        if left_event in line and right_event in line:
+            return (start, end)
+        cursor = end
+
+    left_pos = prompt_text.find(left_event)
+    right_pos = prompt_text.find(right_event)
+    if left_pos >= 0 and right_pos >= 0:
+        span_start = min(left_pos, right_pos)
+        span_end = max(left_pos + len(left_event), right_pos + len(right_event))
+        return (span_start, span_end)
+
+    if left_pos >= 0:
+        return (left_pos, min(len(prompt_text), left_pos + max(24, len(left_event))))
+    if right_pos >= 0:
+        return (
+            right_pos,
+            min(len(prompt_text), right_pos + max(24, len(right_event))),
+        )
+
+    return None
+
+
 def char_span_to_token_span(
     offset_mapping: Sequence[Tuple[int, int]], char_span: CharSpan
 ) -> Optional[TokenSpan]:
