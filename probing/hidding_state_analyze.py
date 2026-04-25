@@ -10,16 +10,15 @@ def main():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="test_10_final",
+        default="test_20_final",
         help="Path to conflict task dataset JSON",
     )
-    model_path = "/data/zhk/models/qwen-3.5-9b"
-    # parser.add_argument(
-    #     "--model-path",
-    #     type=str,
-    #     default="/data/zhk/models/qwen-3.5-9b",
-    #     help="Local HuggingFace model path",
-    # )
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default="qwen-3.5-9b",
+        help="Local HuggingFace model path",
+    )
     # parser.add_argument(
     #     "--output-dir",
     #     type=str,
@@ -91,6 +90,7 @@ def main():
     args = parser.parse_args()
     dataset_path = f"datasets/final6/{args.dataset}.json"
     output_dir = f"outputs/{args.dataset}"
+    model_path = f"/data/zhk/models/{args.model_path}/"
     cfg = ProbePipelineConfig(
         dataset_path=dataset_path,
         model_path=model_path,
