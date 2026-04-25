@@ -2,6 +2,7 @@ import json
 import os
 import glob
 import shutil
+import random
 
 from utils.chat import call_api, call_thinking_api
 from utils.format import parse_json_block
@@ -110,6 +111,7 @@ def single_chat(sample, model):
     r = sample["target"]["r"]
     answers = []
     hints = sample["hints"]
+    # random.shuffle(hints)
     explanation = sample["explanation"]
     question = (
         "Please help me determine the allen relationship between "
@@ -181,6 +183,7 @@ def fill_chat(sample, model):
     )
     explanation = sample["explanation"]
     hints = sample["hints"]
+    # random.shuffle(hints)
     for i in range(len(hints)):
         question += f"{i+1}.{hints[i]}\n"
         # if "Start(" in explanation[i] and "End(" in explanation[i]:
