@@ -208,36 +208,32 @@ def analyze_samples(samples, name, expect_type=None):
             print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}, skip={p_skip}")
 
 
-def final_single_analyze(model, samples=None):
+def final_single_analyze(path, model, samples=None):
     if samples is None:
         # open path and load samples
-        path = f"datasets/answers/final_single_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_single_{model}", expect_type="single")
 
 
-def final_conflict_analyze(model, samples=None):
+def final_conflict_analyze(path, model, samples=None):
     if samples is None:
         # open path and load samples
-        path = f"datasets/answers/final_conflict_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_conflict_{model}", expect_type="conflict")
 
 
-def final_fill_analyze(model, samples=None):
+def final_fill_analyze(path, model, samples=None):
     if samples is None:
         # open path and load samples
-        path = f"datasets/answers/final_fillblank_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_fillblank_{model}", expect_type="fill")
 
 
-def final_all_analyze(model):
+def final_all_analyze(path, model):
     # final_all包含single,conflict,fill三类的分析，是一个总的集成
-    path = f"datasets/answers/final_all_{model}_with_answers.json"
     with open(path, "r", encoding="utf-8") as f:
         samples = json.load(f)
     analyze_samples(samples, f"final_all_{model}")
@@ -251,13 +247,26 @@ def final_task_analyze(name, model=None):
     if not model:
         raise ValueError("model is required")
     if name == "final_all":
-        return final_all_analyze(model)
+        path = f"datasets/answers/final_all_{model}_with_answers.json"
+        return final_all_analyze(path, model)
     if name == "final_single":
-        return final_single_analyze(model)
+        path = f"datasets/answers/final_single_{model}_with_answers.json"
+        return final_single_analyze(path, model)
     if name == "final_conflict":
-        return final_conflict_analyze(model)
+        path = f"datasets/answers/final_conflict_{model}_with_answers.json"
+        return final_conflict_analyze(path, model)
     if name == "final_fill":
-        return final_fill_analyze(model)
+        path = f"datasets/answers/final_fillblank_{model}_with_answers.json"
+        return final_fill_analyze(path, model)
+    if name == "test_len_single":
+        path = f"datasets/answers/test_len_single_{model}_with_answers.json"
+        return final_single_analyze(path, model)
+    if name == "test_len_conflict":
+        path = f"datasets/answers/test_len_conflict_{model}_with_answers.json"
+        return final_conflict_analyze(path, model)
+    if name == "test_len_fillblank":
+        path = f"datasets/answers/test_len_fillblank_{model}_with_answers.json"
+        return final_fill_analyze(path, model)
     raise ValueError(f"Unsupported name: {name}")
 
 
