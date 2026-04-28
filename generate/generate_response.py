@@ -2,6 +2,7 @@ import json
 import os
 import glob
 import shutil
+import random
 
 from utils.chat import call_api, call_thinking_api
 from utils.format import parse_json_block
@@ -23,9 +24,10 @@ Note: Allen relation can be converted to timeline. Each one indicates unique seq
 
 post_question = """
 For each hint, you should carefully consider how to interpret and only start reasoning after all hints have been interpreted. 
-You should thoughtfully consider the answer, noting how each hint influences your reasoning, 
-before finally answering with the abbreviations of final answer. 
-Only give the abbreviation of the final answer. There is only one correct answer. But if you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'.
+Output ONLY JSON with fields: \n
+{
+    "answer_single": "the abbreviation of the final answer. There is only one correct answer. But if you still have multiple answers and cannot decide, answer all of them. If you are unsure about more than five answers, just say 'I can not determine'.
+}
 Note: Just give the final answer(the abbreviation of the allen relation), don't explain how you get the answer.
 """
 
@@ -109,19 +111,20 @@ def single_chat(sample, model):
     r = sample["target"]["r"]
     answers = []
     hints = sample["hints"]
+    # random.shuffle(hints)
     explanation = sample["explanation"]
     question = (
         "Please help me determine the allen relationship between "
         f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information."
     )
-    question += post_question + "\n"
-    # question += detail_post_question + "\n"
+    # question += post_question + "\n"
+    question += detail_post_question + "\n"
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
 
     messages = [
         {"role": "system", "content": allen_helper},
@@ -148,13 +151,13 @@ def conflict_chat(sample, model):
     hints = sample["hints"]
     explanation = sample["explanations"]
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
-    # question += detail_post_question_conflict + "\n"
-    question += post_question_conflict + "\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
+    question += detail_post_question_conflict + "\n"
+    # question += post_question_conflict + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},
@@ -180,14 +183,15 @@ def fill_chat(sample, model):
     )
     explanation = sample["explanation"]
     hints = sample["hints"]
+    # random.shuffle(hints)
     for i in range(len(hints)):
-        # question += f"{i+1}.{hints[i]}\n"
-        if "Start(" in explanation[i] and "End(" in explanation[i]:
-            question += f"{i+1}.{explain_extract(explanation[i])}\n"
-        else:
-            question += f"{i+1}.{explanation[i]}\n"
-    # question += detail_post_question_fill + "\n"
-    question += post_question_fill + "\n"
+        question += f"{i+1}.{hints[i]}\n"
+        # if "Start(" in explanation[i] and "End(" in explanation[i]:
+        #     question += f"{i+1}.{explain_extract(explanation[i])}\n"
+        # else:
+        #     question += f"{i+1}.{explanation[i]}\n"
+    question += detail_post_question_fill + "\n"
+    # question += post_question_fill + "\n"
     messages = [
         {"role": "system", "content": allen_helper},
         {"role": "user", "content": question},

@@ -88,7 +88,7 @@ def json_to_jsonl(name):
     :param json_file_path: 输入的 JSON 文件路径
     :param jsonl_file_path: 输出的 JSONL 文件路径
     """
-    json_file_path = f"datasets/final3/{name}.json"
+    json_file_path = f"datasets/{name}.json"
     jsonl_file_path = f"datasets/jsonl/{name}.jsonl"
     try:
         with open(json_file_path, "r", encoding="utf-8") as f:
@@ -105,13 +105,12 @@ def json_to_jsonl(name):
                 transformed_item = {
                     "custom_id": i,
                     "method": "POST",
-                    "url": "/v1/chat/completions",
+                    "url": "/v1/chat/completions",  
                     "body": {
-                        "model": "qwen3.5-flash",
+                        "model": "qwen3.6-plus",
                         "messages": messages,
-                        "temperature": 0,
                         "max_tokens": 55000,
-                        "extra_body": {"enable_thinking": True},
+                        "enable_thinking": True,
                         "response_format": {"type": "json_object"},
                     },
                 }
@@ -127,7 +126,7 @@ def jsonl_to_json(name):
         f"datasets/answers/{name}_with_answers.jsonl", "r", encoding="utf-8"
     ) as f:
         data = [json.loads(line) for line in f]
-    with open(f"datasets/final/{name}.json", "r", encoding="utf-8") as f:
+    with open(f"datasets/{name}.json", "r", encoding="utf-8") as f:
         original_data = json.load(f)
     for item in data:
         custom_id = int(item["custom_id"])

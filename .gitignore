@@ -23,3 +23,4 @@ outputs/
 # other
 check_real_event_relation.py
 /nohup*
+*.sh

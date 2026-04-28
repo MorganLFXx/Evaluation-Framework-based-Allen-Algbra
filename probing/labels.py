@@ -1,54 +1,73 @@
 from dataclasses import dataclass
-from typing import Dict, Set
+from typing import Dict, List, Sequence, Tuple
+
+
+RelationTriple = Tuple[str, str, str]
 
 
 @dataclass
-class Stage1LabelConfig:
-    neighbor_window: int = 1
+class LabelBuildResult:
+    positives: List[RelationTriple]
+    negatives: List[RelationTriple]
+    candidates: List[RelationTriple]
+    label_map: Dict[RelationTriple, int]
 
 
-def build_stage1_label_info(sample: Dict, config: Stage1LabelConfig) -> Dict:
-    hints = sample.get("hints", [])
-    if not hints:
-        raise ValueError("Sample has no hints")
-
-    conflict_no = sample.get("target", {}).get("conflict_no")
-    if conflict_no is None:
-        raise ValueError("Sample has no target.conflict_no")
-
-    core_idx = int(conflict_no) - 1
-    if core_idx < 0 or core_idx >= len(hints):
-        raise ValueError(
-            f"Invalid conflict_no={conflict_no} for hints length={len(hints)}"
-        )
-
-    # Neighbor hints are treated as near-core conflict context.
-    near_indices: Set[int] = set()
-    window = max(0, int(config.neighbor_window))
-    for i in range(core_idx - window, core_idx + window + 1):
-        if 0 <= i < len(hints) and i != core_idx:
-            near_indices.add(i)
-
-    return {
-        "core_idx": core_idx,
-        "near_indices": sorted(near_indices),
-        "neighbor_window": window,
-    }
+def normalize_triples(triples: Sequence[RelationTriple]) -> List[RelationTriple]:
+    """Deduplicate triples while preserving input order."""
+    out: List[RelationTriple] = []
+    seen = set()
+    for tri in triples:
+        if len(tri) != 3:
+            continue
+        key = (str(tri[0]), str(tri[1]), str(tri[2]))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
 
 
-def stage1_binary_label(hint_idx: int, label_info: Dict) -> int:
-    # Binary setting: core and near-core are both positive.
-    if hint_idx == label_info["core_idx"]:
-        return 1
-    if hint_idx in set(label_info["near_indices"]):
-        return 1
-    return 0
+def build_key_relation_labels(
+    whole_rels: Sequence[RelationTriple],
+    key_rels: Sequence[RelationTriple],
+) -> LabelBuildResult:
+    """
+    Build binary labels for probing:
+    - key_rels -> positive (1)
+    - whole_rels minus key_rels -> negative (0)
+    """
+    whole = normalize_triples(whole_rels)
+    key = normalize_triples(key_rels)
+    key_set = set(key)
+
+    positives = [tri for tri in whole if tri in key_set]
+    # Keep key rels that are not present in whole_rels as extra positives.
+    for tri in key:
+        if tri not in key_set:
+            continue
+        if tri not in positives:
+            positives.append(tri)
+
+    negatives = [tri for tri in whole if tri not in key_set]
+    candidates = positives + negatives
+
+    label_map: Dict[RelationTriple, int] = {}
+    for tri in negatives:
+        label_map[tri] = 0
+    for tri in positives:
+        label_map[tri] = 1
+
+    return LabelBuildResult(
+        positives=positives,
+        negatives=negatives,
+        candidates=candidates,
+        label_map=label_map,
+    )
 
 
-def stage1_three_way_label(hint_idx: int, label_info: Dict) -> int:
-    # Three-way setting: separate core vs near-core vs others.
-    if hint_idx == label_info["core_idx"]:
-        return 2
-    if hint_idx in set(label_info["near_indices"]):
-        return 1
-    return 0
+def label_for_triple(
+    triple: RelationTriple, label_map: Dict[RelationTriple, int]
+) -> int:
+    """Return binary label for a relation triple, defaulting to negative."""
+    return int(label_map.get(triple, 0))

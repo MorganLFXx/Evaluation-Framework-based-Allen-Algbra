@@ -66,6 +66,7 @@ def call_deepseek_api(messages, call_model) -> str:
     try:
         response = client.chat.completions.create(
             model="deepseek-reasoner",
+            # model="deepseek-chat",
             messages=messages,
             max_tokens=55000,
             stream=False,
@@ -155,7 +156,7 @@ def call_volcano_api(messages, call_model):
         messages=messages,
         max_tokens=55000,
         timeout=300,  # 5分钟超时
-        response_format={"type": "json_object"},
+        # response_format={"type": "json_object"},
         extra_body={"reasoning": {"enabled": True}},
     )
     return response.choices[0].message
@@ -167,7 +168,7 @@ def call_open_route_api(messages, call_model):
         api_key=open_route_apikey,
     )
     response = client.chat.completions.create(
-        model="qwen/qwen3.6-plus:free",
+        model=f"google/{call_model}",
         messages=messages,
         max_tokens=55000,
         timeout=300,  # 5分钟超时
@@ -178,9 +179,29 @@ def call_open_route_api(messages, call_model):
 
 
 def call_api(messages, call_model) -> str:
-    return call_tongyi_api(messages, call_model).content
-    # return call_local_api(messages, call_model).content
-    # return call_fast_tongyi_api(messages, call_model).content
+    if call_model in opensource_model:
+        messages.extend(  # 使用prompt trick引导模型分离思考过程
+            [
+                {"role": "assistant", "content": "Here is my thinking process:\n"},
+                {
+                    "role": "user",
+                    "content": "\n\nThinking complete. Now, output ONLY the JSON.",
+                },
+            ]
+        )
+
+    if call_model in local_model:
+        return call_local_api(messages, call_model).content
+    elif call_model.startswith("deepseek"):
+        return call_deepseek_api(messages, call_model).content
+    # elif call_model.startswith("glm"):
+    #     return call_zhipu_api(messages, call_model)
+    # elif call_model.startswith("gemini"):
+    #     return call_open_route_api(messages, call_model)
+    elif call_model.startswith("seed"):
+        return call_volcano_api(messages, call_model).content
+    else:
+        return call_tongyi_api(messages, call_model).content
 
 
 def call_thinking_api(messages, call_model) -> dict:
@@ -199,10 +220,10 @@ def call_thinking_api(messages, call_model) -> dict:
         return call_local_api(messages, call_model)
     elif call_model.startswith("deepseek"):
         return call_deepseek_api(messages, call_model)
-    elif call_model.startswith("glm"):
-        return call_zhipu_api(messages, call_model)
-    # elif call_model.startswith("qwen3.6-plus"):
-    #     return call_open_route_api(messages, call_model)
+    # elif call_model.startswith("glm"):
+    #     return call_zhipu_api(messages, call_model)
+    elif call_model.startswith("gemini"):
+        return call_open_route_api(messages, call_model)
     elif call_model.startswith("seed"):
         return call_volcano_api(messages, call_model)
     else:
@@ -220,9 +241,12 @@ def open_route_limit():
 def main():
     try:
         message = [
-            {"role": "user", "content": "请给我介绍你的身份，你有什么能力？"},
+            {
+                "role": "user",
+                "content": "请给我介绍你的身份，你的模型型号是什么，你有什么能力？",
+            },
         ]
-        result = call_thinking_api(message, "glm-5")
+        result = call_thinking_api(message, "gemini-3.1-pro-preview")
         print(result)
     except Exception as e:
         print(str(e))
