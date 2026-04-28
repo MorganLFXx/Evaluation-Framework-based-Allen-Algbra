@@ -2,10 +2,7 @@
 
 ## 1. 总体流程
 
-目标是对同一批样本做 control/treatment 对照，并在隐藏层上分两阶段检查模型：
-
-1. Stage1：是否识别出与冲突直接相关的两条基本关系
-2. Stage3：在 Stage1 检测层之后，模型恢复了多少全局关系
+目标是对同一批样本做 control/treatment 对照，并在隐藏层上检查模型能否：
 
 端到端步骤：
 
@@ -22,25 +19,8 @@
 
 核心编排入口在 [probing/pipeline.py](probing/pipeline.py)。
 
-## 2. 阶段定义
 
-### Stage1
-检查那两个会和冲突句引发冲突的基本关系是否判断出来。
-
-实现口径：
-- 样本内正类：locate_conflict 返回的两条 cause 关系。
-- 样本内负类：同样本其他非冲突关系（来自 get_whole_rels 与关系集合补充）。
-- 每层训练/评估二分类线性探针。
-
-### Stage3
-尽可能多地检查模型还原了全局多少关系。
-
-实现口径：
-- 先找 Stage1 首个“冲突关系组已检测到”的层（per sample, per group）。
-- 从该层及之后，统计 get_whole_rels 中关系被探针正确恢复的比例。
-- 输出每样本恢复轨迹与总体分布。
-
-## 3. 目录内每个文件职责
+## 2. 目录内每个文件职责
 
 ### [probing/conflict_detect_example.py](probing/conflict_detect_example.py)
 职责：提供样本结构与关系抽取辅助逻辑。
@@ -79,22 +59,10 @@
 ### [probing/__init__.py](probing/__init__.py)
 职责：导出统一调用接口。
 
-## 4. 输出产物
 
-默认输出目录：outputs/stage1_probe
+## 4. 四个核心文件内部详细流程
 
-主要产物：
-- stage1_features.pt（可选特征缓存）
-- stage1_report.json（包含 Stage1/Stage3 分层结果）
-
-报告重点字段：
-- 每层 Stage1 二分类指标与 A/B 差值
-- 每层 Stage3 关系恢复指标
-- Stage3 检测层后的全局关系恢复比例（按样本与汇总）
-
-## 5. 四个核心文件内部详细流程
-
-### 5.1 [probing/model_inference.py](probing/model_inference.py)
+### 4.1 [probing/model_inference.py](probing/model_inference.py)
 
 定位：负责把“问题文本”变成“逐层隐藏状态”。
 
@@ -119,7 +87,7 @@
 - HiddenStateExtractor.render_messages
 - HiddenStateExtractor.extract_from_text
 
-### 5.2 [probing/anchors.py](probing/anchors.py)
+### 4.2 [probing/anchors.py](probing/anchors.py)
 
 定位：负责“文本位置 -> token 位置 -> 向量池化”。
 
@@ -137,7 +105,7 @@
 - mean_pool_span
 - build_stage1_anchor_spans
 
-### 5.3 [probing/train_probe.py](probing/train_probe.py)
+### 4.3 [probing/train_probe.py](probing/train_probe.py)
 
 定位：负责线性探针的训练、评估与预测。
 
@@ -159,7 +127,7 @@
 - evaluate_linear_probe
 - predict_linear_probe
 
-### 5.4 [probing/labels.py](probing/labels.py)
+### 4.4 [probing/labels.py](probing/labels.py)
 
 定位：负责 Stage1 的标签规则定义。
 
