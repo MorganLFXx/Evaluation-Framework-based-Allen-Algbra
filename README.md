@@ -3,7 +3,7 @@
 ## Structure
 
 - datasets/: datasets and answer files
-    - final_{task}.jsonl: A ready-to-use benchmark that does not depend on this repository
+    - final_all.jsonl: A ready-to-use benchmark that does not depend on this repository
     - final_{task}.json: Benchmark compatible with this code repository workflow
 - generate/: data generation and prompt construction
 - explain/: answer verification and error checking
