@@ -20,6 +20,7 @@ datasets/**
 !datasets/.gitkeep
 !datasets/answers/.gitkeep
 !datasets/explain/.gitkeep
+!datasets/temp/.gitkeep
 !outputs/.gitkeep
 datas/
 outputs/
