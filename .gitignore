@@ -16,6 +16,7 @@ allenEnv/
 .github/
 
 # dataset
+old_datasets/
 datasets/
 datas/
 outputs/
