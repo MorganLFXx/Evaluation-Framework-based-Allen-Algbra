@@ -16,6 +16,8 @@ allenEnv/
 .github/
 
 # dataset
+datas/
+old_datasets/
 datasets/**
 !datasets/.gitkeep
 !datasets/answers/.gitkeep
