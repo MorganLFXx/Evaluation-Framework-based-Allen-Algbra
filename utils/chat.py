@@ -18,8 +18,6 @@ local_model = [
     "qwen3.5-2b",
     "qwen3.5-4b",
     "qwen3.5-9b",
-    "qwen3.5-9b-gemini",
-    "qwen3.5-9b-allen1",
     "qwen3.5-27b",
     "qwen3.5-35b",
 ]
@@ -50,11 +48,10 @@ def call_zhipu_api(messages, call_model):
             messages=messages,
             max_tokens=55000,
             stream=False,
-            timeout=300,  # 5分钟超时
+            timeout=300,
             response_format={"type": "json_object"},
             extra_body={"thinking": {"type": "enabled"}},
         )
-        # print(response.choices[0])
     except Exception as e:
         raise Exception(f"API调用失败: {str(e)}")
     return response.choices[0].message
@@ -66,11 +63,10 @@ def call_deepseek_api(messages, call_model) -> str:
     try:
         response = client.chat.completions.create(
             model="deepseek-reasoner",
-            # model="deepseek-chat",
             messages=messages,
             max_tokens=55000,
             stream=False,
-            timeout=300,  # 5分钟超时
+            timeout=300,
             extra_body={"enable_thinking": True},
             response_format={"type": "json_object"},
         )
@@ -92,20 +88,9 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus"):
             messages=messages,
             max_tokens=55000,
             stream=False,
-            timeout=300,  # 5分钟超时
+            timeout=300,
             extra_body={"enable_thinking": True},
             response_format={"type": "json_object"},
-            # response_format=(
-            #     {
-            #         "type": "json_schema",
-            #         "json_schema": {
-            #             "name": "ResponseModel",
-            #             "schema": ResponseModel.model_json_schema(),
-            #         },
-            #     }
-            #     if call_model in opensource_model
-            #     else {"type": "json_object"}
-            # ),
         )
         # print(response.choices[0])
         # print(response.usage.total_tokens)
@@ -118,7 +103,6 @@ def call_tongyi_api(messages, call_model="qwen3.5-plus"):
 def call_local_api(messages, call_model) -> dict:
     client = OpenAI(base_url="http://localhost:18235/v1", api_key="test")
 
-    # print(messages)
     try:
         response = client.chat.completions.create(
             model=call_model,
@@ -128,15 +112,7 @@ def call_local_api(messages, call_model) -> dict:
             stream=False,
             timeout=300,  # 5分钟超时
             response_format={"type": "json_object"},
-            # {
-            #     "type": "json_schema",
-            #     "json_schema": {
-            #         "name": "ResponseModel",
-            #         "schema": ResponseModel.model_json_schema(),
-            #     },
-            # },
         )
-        # print(response.choices[0])
     except Exception as e:
         print(f"API调用失败: {str(e)}")
         raise Exception(f"API调用失败: {str(e)}")
@@ -146,17 +122,14 @@ def call_local_api(messages, call_model) -> dict:
 
 def call_volcano_api(messages, call_model):
     client = OpenAI(
-        # The base URL for model invocation
         base_url="https://ark.cn-beijing.volces.com/api/v3",
-        # Replace with your API Key
         api_key=volcano_apikey,
     )
     response = client.chat.completions.create(
         model="doubao-seed-2-0-pro-260215",
         messages=messages,
         max_tokens=55000,
-        timeout=300,  # 5分钟超时
-        # response_format={"type": "json_object"},
+        timeout=300,
         extra_body={"reasoning": {"enabled": True}},
     )
     return response.choices[0].message
@@ -171,7 +144,7 @@ def call_open_route_api(messages, call_model):
         model=f"google/{call_model}",
         messages=messages,
         max_tokens=55000,
-        timeout=300,  # 5分钟超时
+        timeout=300,
         extra_body={"reasoning": {"enabled": True}},
         response_format={"type": "json_object"},
     )

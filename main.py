@@ -254,7 +254,7 @@ def main():
         # 3. 答案校验
         right = qa_checker.answer_verify(args.name + "_" + args.model)
         print(f"Answer verification completed. Correct answers: {right}")
-        # 4. 错误校验(暂时跳过)
+        # 4. 错误校验
         if not args.skip_error_check:
             error_checker.main(
                 path=args.name,

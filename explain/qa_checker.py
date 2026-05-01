@@ -16,7 +16,6 @@ def conflict_check(sample):
 
 
 def _find_equality_term_pairs(text):
-    # Find complete terms around each '=' so we can swap left/right terms.
     term_pattern = re.compile(r"(?:Start|End)\([A-Za-z]\d+\)")
     term_matches = list(term_pattern.finditer(text))
     if not term_matches:
@@ -53,7 +52,6 @@ def _build_fill_answer_candidates(answer):
     candidates = {answer}
     pairs = _find_equality_term_pairs(answer)
 
-    # There are at most two '=' in this task.
     pairs = pairs[:2]
     if not pairs:
         return candidates
@@ -61,7 +59,6 @@ def _build_fill_answer_candidates(answer):
     for mask in range(1, 1 << len(pairs)):
         candidate = answer
         selected = [pairs[i] for i in range(len(pairs)) if (mask >> i) & 1]
-        # Apply from right to left so original spans remain valid.
         selected.sort(key=lambda p: max(p[0][0], p[1][0]), reverse=True)
         for left_span, right_span in selected:
             candidate = _swap_by_spans(candidate, left_span, right_span)
@@ -72,7 +69,6 @@ def _build_fill_answer_candidates(answer):
 def fill_check(sample):
     candidates = list(sample["target"]["blank_candidate"])
     answer = sample["answer_single"][0].strip()
-    # 去除answer中的空格
     answer = answer.replace(" ", "")
     answer_candidates = _build_fill_answer_candidates(answer)
     for a in answer_candidates:
@@ -132,7 +128,6 @@ def answer_verify(name):
             ensure_ascii=False,
             indent=4,
         )
-    # print(f"Get response error: {skip}")
     print(
         f"Skip: {skip}, Accuracy: {right}/{len(data)-skip} = {right/(len(data)-skip):.4f}"
     )
@@ -193,7 +188,6 @@ def analyze_samples(samples, name, expect_type=None):
         t_total = task_stats[key]["total"]
         t_right = task_stats[key]["right"]
         t_skip = task_stats[key]["skip"]
-        # t_valid = t_total - t_skip
         acc = t_right / t_total if t_total else 0.0
         print(f"  {key}: {t_right}/{t_total} = {acc:.4f}, skip={t_skip}")
     print("Path length stats (by task):")
@@ -203,41 +197,33 @@ def analyze_samples(samples, name, expect_type=None):
             p_total = path_len_stats[ttype][key]["total"]
             p_right = path_len_stats[ttype][key]["right"]
             p_skip = path_len_stats[ttype][key]["skip"]
-            # p_valid = p_total - p_skip
             acc = p_right / p_total if p_total else 0.0
             print(f"    len={key}: {p_right}/{p_total} = {acc:.4f}, skip={p_skip}")
 
 
-def final_single_analyze(model, samples=None):
+def final_single_analyze(path, model, samples=None):
     if samples is None:
-        # open path and load samples
-        path = f"datasets/answers/final_single_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_single_{model}", expect_type="single")
 
 
-def final_conflict_analyze(model, samples=None):
+def final_conflict_analyze(path, model, samples=None):
     if samples is None:
-        # open path and load samples
-        path = f"datasets/answers/final_conflict_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_conflict_{model}", expect_type="conflict")
 
 
-def final_fill_analyze(model, samples=None):
+def final_fill_analyze(path, model, samples=None):
     if samples is None:
-        # open path and load samples
-        path = f"datasets/answers/final_fillblank_{model}_with_answers.json"
         with open(path, "r", encoding="utf-8") as f:
             samples = json.load(f)
     analyze_samples(samples, f"final_fillblank_{model}", expect_type="fill")
 
 
-def final_all_analyze(model):
+def final_all_analyze(path, model):
     # final_all包含single,conflict,fill三类的分析，是一个总的集成
-    path = f"datasets/answers/final_all_{model}_with_answers.json"
     with open(path, "r", encoding="utf-8") as f:
         samples = json.load(f)
     analyze_samples(samples, f"final_all_{model}")
@@ -245,19 +231,31 @@ def final_all_analyze(model):
 
 def final_task_analyze(name, model=None):
     # 统一入口, 按照name分流
-    # name -> final_all, final_single, final_conflict, final_fill
     if not name:
         raise ValueError("name is required")
     if not model:
         raise ValueError("model is required")
     if name == "final_all":
-        return final_all_analyze(model)
+        path = f"datasets/answers/final_all_{model}_with_answers.json"
+        return final_all_analyze(path, model)
     if name == "final_single":
-        return final_single_analyze(model)
+        path = f"datasets/answers/final_single_{model}_with_answers.json"
+        return final_single_analyze(path, model)
     if name == "final_conflict":
-        return final_conflict_analyze(model)
+        path = f"datasets/answers/final_conflict_{model}_with_answers.json"
+        return final_conflict_analyze(path, model)
     if name == "final_fill":
-        return final_fill_analyze(model)
+        path = f"datasets/answers/final_fillblank_{model}_with_answers.json"
+        return final_fill_analyze(path, model)
+    if name == "test_len_single":
+        path = f"datasets/answers/test_len_single_with_answers.json"
+        return final_single_analyze(path, model)
+    if name == "test_len_conflict":
+        path = f"datasets/answers/test_len_conflict_with_answers.json"
+        return final_conflict_analyze(path, model)
+    if name == "test_len_fillblank":
+        path = f"datasets/answers/test_len_fillblank_with_answers.json"
+        return final_fill_analyze(path, model)
     raise ValueError(f"Unsupported name: {name}")
 
 
@@ -271,7 +269,6 @@ def main(mode="answer_verify", name=None, names=None, show=5):
 
 
 if __name__ == "__main__":
-    # main(mode="answer_verify", name="sample")
     sample = {
         "target": {
             "l": 0,
@@ -295,5 +292,3 @@ if __name__ == "__main__":
         "answer_single": ["Start(T0)=Start(S2)<End(T0)<End(S2)"],
     }
     print(fill_check(sample))
-
-    # m,M,f,F,s,S

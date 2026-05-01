@@ -1,3 +1,5 @@
+"""仅用于实验中方便平台使用平台的批量推理功能，非正式工具"""
+
 import json
 import os
 import argparse
@@ -35,6 +37,25 @@ def item2single(sample):
     return messages
 
 
+def item2singleQA(sample):
+    l = sample["target"]["l"]
+    r = sample["target"]["r"]
+    hints = sample["hints"]
+    question = (
+        "Please help me determine the allen relationship between "
+        f"'{sample['events'][l]}' and '{sample['events'][r]}' based on following information steps by steps."
+    )
+    question += detail_post_question + "\n"
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    ground_truth = sample["target"]["rel"]
+
+    return {
+        "question": question,
+        "ground_truth": ground_truth,
+    }
+
+
 def item2conflict(sample):
     question = (
         "There is a conflict hint in the hints. "
@@ -52,6 +73,24 @@ def item2conflict(sample):
         {"role": "user", "content": question},
     ]
     return messages
+
+
+def item2conflictQA(sample):
+    question = (
+        "There is a conflict hint in the hints. "
+        "Please help me find out the conflict hint."
+        f"Note: All hints directly describe the relation between 2 events is absolutely correct."
+        f"'Directly describe' means you can directly determine the allen relation between 2 event based on this hint without any other hints. "
+    )
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    question += detail_post_question_conflict
+    ground_truth = sample["target"]["conflict_no"]
+    return {
+        "question": question,
+        "ground_truth": ground_truth,
+    }
 
 
 def item2fill(sample):
@@ -73,6 +112,27 @@ def item2fill(sample):
     return messages
 
 
+def item2fillQA(sample):
+    l_no, r_no = sample["target"]["blank_object"]
+    event_l, event_r = sample["events"][l_no], sample["events"][r_no]
+    question = (
+        f"Among these hints, there is one missing hint that describes the Allen relation between {event_l} and {event_r}."
+        f"Based on the existing hints, please describe the order of the start and end time points of {event_l} and {event_r}."
+    )
+    hints = sample["hints"]
+    for i in range(len(hints)):
+        question += f"{i+1}.{hints[i]}\n"
+    question += detail_post_question_fill + "\n"
+    ground_truth = sample["target"]["blank_candidate"]
+    # process: sample["target"]["blank_candidate"] is like ["'D0' during 'I2' or Start(I2)<Start(D0)<End(D0)<End(I2).","'D0' finishes 'I2' or Start(I2)<Start(D0)<End(D0)=End(I2).","'I2' overlaps 'D0' or Start(I2)<Start(D0)<End(I2)<End(D0)."]
+    # I just want the part after "or ", so I split by " or " and take the second part
+    ground_truth = [gt.split(" or ")[1] if " or " in gt else gt for gt in ground_truth]
+    return {
+        "question": question,
+        "ground_truth": ground_truth,
+    }
+
+
 def item2question(sample):
     if "conflict_no" in sample["target"]:
         return item2conflict(sample)
@@ -80,6 +140,15 @@ def item2question(sample):
         return item2fill(sample)
     else:
         return item2single(sample)
+
+
+def item2qa(sample):
+    if "conflict_no" in sample["target"]:
+        return item2conflictQA(sample)
+    elif "blank_object" in sample["target"]:
+        return item2fillQA(sample)
+    else:
+        return item2singleQA(sample)
 
 
 def json_to_jsonl(name):
@@ -105,9 +174,9 @@ def json_to_jsonl(name):
                 transformed_item = {
                     "custom_id": i,
                     "method": "POST",
-                    "url": "/v1/chat/completions",  
+                    "url": "/v1/chat/completions",
                     "body": {
-                        "model": "qwen3.6-plus",
+                        "model": "qwen3.5-plus",
                         "messages": messages,
                         "max_tokens": 55000,
                         "enable_thinking": True,
@@ -190,6 +259,29 @@ def merge_bad_samples(name):
     os.remove(f"datasets/{name}_bad_samples.json")
 
 
+def dataset_reformat(name):
+    json_file_path = f"datasets/{name}.json"
+    jsonl_file_path = f"datasets/jsonl/{name}.jsonl"
+    try:
+        with open(json_file_path, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+    except FileNotFoundError:
+        print(f"错误：找不到文件 {json_file_path}")
+        return
+
+    try:
+        with open(jsonl_file_path, "w", encoding="utf-8") as f:
+            i = 0
+            for item in json_data:
+                transformed_item = item2qa(item)
+                transformed_item["id"] = item["id"]
+                f.write(json.dumps(transformed_item, ensure_ascii=False) + "\n")
+                i += 1
+        print(f"转换成功！JSONL 文件已保存至：{jsonl_file_path}")
+    except Exception as e:
+        print(f"写入文件失败：{e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Batch transform tools for Allen inference datasets."
@@ -219,11 +311,18 @@ def main():
         default="error_samples_batch",
         help=("Dataset base name. "),
     )
+    parser.add_argument(
+        "--reformat",
+        action="store_true",
+        help="Reformat datasets/<name>.json to datasets/jsonl/<name>.jsonl with question and ground truth for evaluation.",
+    )
 
     args = parser.parse_args()
-    operations = [args.n2l, args.l2n, args.bad, args.merge]
+    operations = [args.n2l, args.l2n, args.bad, args.merge, args.reformat]
     if sum(operations) == 0:
-        parser.error("Please specify one operation flag: -n2l, -l2n, -bad, or -merge")
+        parser.error(
+            "Please specify one operation flag: -n2l, -l2n, -bad, -merge, or -reformat"
+        )
 
     if args.n2l:
         json_to_jsonl(args.name)
@@ -233,6 +332,8 @@ def main():
         check_bad_samples(args.name)
     elif args.merge:
         merge_bad_samples(args.name)
+    elif args.reformat:
+        dataset_reformat(args.name)
 
 
 if __name__ == "__main__":
