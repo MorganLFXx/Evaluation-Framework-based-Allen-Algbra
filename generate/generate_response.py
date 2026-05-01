@@ -20,7 +20,6 @@ Here are some things to note:
 The correspondence between uppercase and lowercase letters of the same letter is inverse. For example, A p B is equivalent to B P A.
 Note: Allen relation can be converted to timeline. Each one indicates unique sequence of start and end time points for two events.
 """
-# 2. Please don't overthink. If you get the answer, don't check it over and over again.
 
 post_question = """
 For each hint, you should carefully consider how to interpret and only start reasoning after all hints have been interpreted. 
@@ -134,7 +133,6 @@ def single_chat(sample, model):
         result = call_thinking_api(messages, model)
     except Exception as e:
         result = f"API调用失败{str(e)}"
-    # print(result)
     answers.append(result)
     sleep(1)
     return answers
@@ -167,7 +165,6 @@ def conflict_chat(sample, model):
         result = call_thinking_api(messages, model)
     except Exception as e:
         result = f"API调用失败{str(e)}"
-    # print(result)
     answers.append(result)
     sleep(1)
     return answers
@@ -201,7 +198,6 @@ def fill_chat(sample, model):
         result = call_thinking_api(messages, model)
     except Exception as e:
         result = f"API调用失败{str(e)}"
-    # print(result)
     answers.append(result)
     sleep(1)
     return answers
@@ -294,7 +290,6 @@ def _recover_answers_from_temp(
             if answer_key not in sample_obj:
                 continue
 
-            # Only update the answer field to avoid overwriting other fields.
             samples[index][answer_key] = sample_obj[answer_key]
             restored += 1
 
@@ -395,7 +390,6 @@ def multi_thread_generate(samples, name, chat_type, model, workers):
                 thread_results.append({"index": index, "sample": samples[index]})
                 _atomic_dump_json(thread_out_path, thread_results)
             except Exception as e:
-                # 错误处理：遇到错误跳过即可
                 print(
                     f"  ❌ 线程 {thread_no} 处理第 {index + 1} 个用例出错，已跳过: {e}，回答为：{answers}"
                 )
@@ -405,7 +399,6 @@ def multi_thread_generate(samples, name, chat_type, model, workers):
                         "skipped": True,
                         "error": str(e),
                         "sample": samples[index],
-                        # "data": answers,
                     }
                 )
                 _atomic_dump_json(thread_out_path, thread_results)
@@ -433,12 +426,10 @@ def main(name, chat_type, model, workers=1, hint="hint"):
     samples = json.load(open(f"datasets/{name}.json", "r"))
     multi_thread_generate(samples, name, chat_type, model, workers)
 
-    # 答案整合：所有线程都处理完后，输出最终答案文件
     final_path = f"datasets/answers/{name}_{model}_with_answers.json"
     with open(final_path, "w", encoding="utf-8") as f:
         json.dump(samples, f, indent=4, ensure_ascii=False)
 
-    # 删除 temp 文件夹
     shutil.rmtree(temp_dir)
 
     print(f"Generated answers and saved to {final_path}")

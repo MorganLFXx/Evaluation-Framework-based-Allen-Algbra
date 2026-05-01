@@ -1,3 +1,5 @@
+"""!!!Deprecated!!!"""
+
 """Extract error sample from answered datasets, then repeatedly generate and verify them to filter out the most difficult ones."""
 
 import json
@@ -63,7 +65,6 @@ def batch_check(names: list):
     for sample in samples:
         sample_id = sample["id"]
         corresponding_results = results[4 * sample_id : 4 * sample_id + 4]
-        # "right" may be missing in some results, which means the model fails to answer the question, we treat it as wrong
         right_count = sum(
             [1 for res in corresponding_results if res.get("right", False) == True]
         )
@@ -98,7 +99,6 @@ def main(names: list, ques_type, workers, model):
     round = 4
     threshold = 2
     temp_answer_path = "datasets/explain/temp/"
-    # 创建临时文件夹
     os.makedirs(temp_answer_path, exist_ok=True)
     final_samples = []
     samples = load_datasets(names)
@@ -130,10 +130,8 @@ def main_batch():
     template = "{name}_{model}"
     name_list = ["test_bases", "test_4", "test_15", "test_20", "test_25", "test_50"]
     path_list = [template.format(name=name, model=model) for name in name_list]
-    # batch_generate(path_list)
     batch_check(path_list)
 
 
 if __name__ == "__main__":
     main()
-    # main_batch()

@@ -1,7 +1,3 @@
-"""
-检查模型生成的答案是否存在自然语言理解错误或推理错误，并给出相应的分析。
-"""
-
 import json
 import os
 import shutil
@@ -157,13 +153,11 @@ def _separate_thinking(thinking: str) -> Tuple[str, str]:
     hint_match = hint_pattern.search(thinking)
     reason_match = reason_pattern.search(thinking)
 
-    # Preferred split: keep only phase content (without phase titles).
     if reason_match:
         hint_start = hint_match.end() if hint_match else 0
         hint_text = thinking[hint_start : reason_match.start()].strip()
         reasoning_text = thinking[reason_match.end() :].strip()
         return hint_text, reasoning_text
-    # Fallback: no explicit reasoning phase marker.
     if hint_match:
         return thinking[hint_match.end() :].strip(), ""
 
@@ -493,15 +487,9 @@ def main(path, workers=1, model="qwen3.5-plus"):
             sample = data[index]
             local_total += 1
             if "right" not in sample or "thinking" not in sample:
-                # print(
-                #     f"[debug] Worker {worker_id + 1} sample {sample.get('id')} missing 'right' field, skipping"
-                # )
                 continue
             if sample.get("right") is True:
                 local_ok += 1
-                # print(
-                #     f"[debug] Worker {worker_id + 1} sample {sample.get('id')} correct, skipping"
-                # )
                 local_results.append(
                     {
                         "index": index,
@@ -572,7 +560,6 @@ def main(path, workers=1, model="qwen3.5-plus"):
     ) as f:
         json.dump(write_samples, f, ensure_ascii=False, indent=4)
 
-    # 删除临时文件夹
     shutil.rmtree(temp_dir)
 
     print(

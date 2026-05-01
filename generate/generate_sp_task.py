@@ -97,7 +97,7 @@ def generate_conflict(sample):
     Step: 1. Choose a leaf-parent hint to replace 2. Replace it with its antisense form 3. Save the replaced hint as 'conflict_hint' and 'conflict num' 4. Add a new hint 'target_hint' to the hints list
     """
     new_sample = copy.deepcopy(sample)
-    del new_sample["explanation"]  # no need
+    del new_sample["explanation"]
     hints = []
     explanations = []
 
@@ -105,7 +105,7 @@ def generate_conflict(sample):
     candidate_path_no = []
     for i in range(len(sample["paths"])):
         path = sample["paths"][i]
-        if path["left"] == -1 and path["right"] == -1:  # confirm conflict
+        if path["left"] == -1 and path["right"] == -1:
             candidate_path_no.append(i)
     if not candidate_path_no:
         print(new_sample["id"], "no candidate path for conflict generation")
@@ -136,7 +136,7 @@ def generate_conflict(sample):
             explanations.append(right_hint["explanation"])
             hints.append(conflict_hint["hint"])
             explanations.append(conflict_hint["explanation"])
-            # 对应回答时的提示编号，从1开始
+            # Hint No. from 1
             new_sample["target"]["conflict_no"] = len(hints)
         else:
             p_hints = generate_hint(p, new_sample["events"], "indirect pos")

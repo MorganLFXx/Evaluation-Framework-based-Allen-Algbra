@@ -1,3 +1,5 @@
+"""仅用于实验中方便平台使用平台的批量推理功能，非正式工具"""
+
 import json
 import os
 import argparse
@@ -105,9 +107,9 @@ def json_to_jsonl(name):
                 transformed_item = {
                     "custom_id": i,
                     "method": "POST",
-                    "url": "/v1/chat/completions",  
+                    "url": "/v1/chat/completions",
                     "body": {
-                        "model": "qwen3.6-plus",
+                        "model": "qwen3.5-plus",
                         "messages": messages,
                         "max_tokens": 55000,
                         "enable_thinking": True,

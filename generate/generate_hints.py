@@ -1,3 +1,5 @@
+from pydantic.fields import Deprecated
+
 from generate.hint import *
 import generate.hint as hint
 from utils.relation import allen_relations
@@ -39,12 +41,8 @@ def generate_neg_hints(path, events):
     return neg_hints
 
 
+@Deprecated
 def generate_indirect_neg_hints(path, events):
-    """
-    提供间接否定提示
-    要求：尽可能快速地提供应被排除关系path["excluded"]不成立的特征
-    return: list of hints
-    """
     hints = []
     seen_attrs = set()
     target_rel = path["target"]
@@ -64,11 +62,6 @@ def generate_indirect_neg_hints(path, events):
 
 
 def generate_indirect_evidence(path, events):
-    """
-    提供间接肯定提示
-    要求：尽可能快速地提供体现目标关系`path["target"]`成立的特征
-    return: list of hints
-    """
     hints = []
     target_rel = path["target"]
     l_no = path["base_event"][0]
@@ -150,7 +143,6 @@ def generate_exclude_hint(excludes, l_no, r_no, events):
 
 def generate_hint(path, events, hint_type):
     hints = []
-    # composition
     if path["left"] == -1:
         hints.append(
             get_relation_hint(
@@ -164,7 +156,6 @@ def generate_hint(path, events, hint_type):
             )
         )
 
-    # exclude
     if hint_type == "direct neg":
         hints.extend(generate_neg_hints(path, events))
     elif hint_type == "indirect neg":

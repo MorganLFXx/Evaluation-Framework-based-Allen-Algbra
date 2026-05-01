@@ -19,12 +19,6 @@ def main():
         default="qwen-3.5-9b",
         help="Local HuggingFace model path",
     )
-    # parser.add_argument(
-    #     "--output-dir",
-    #     type=str,
-    #     default="outputs/",
-    #     help="Directory to save probing features and report",
-    # )
     parser.add_argument(
         "--max-samples",
         type=int,

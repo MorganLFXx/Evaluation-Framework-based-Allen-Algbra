@@ -16,11 +16,14 @@ allenEnv/
 .github/
 
 # dataset
-datasets/
+datasets/**
+!datasets/.gitkeep
+!datasets/answers/.gitkeep
+!datasets/explain/.gitkeep
+!outputs/.gitkeep
 datas/
 outputs/
 
 # other
-check_real_event_relation.py
 /nohup*
 *.sh
