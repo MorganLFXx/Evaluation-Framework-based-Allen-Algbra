@@ -21,8 +21,11 @@ datasets/**
 !datasets/answers/.gitkeep
 !datasets/explain/.gitkeep
 !datasets/temp/.gitkeep
+!datasets/
 !outputs/.gitkeep
-datas/
+!datasets/final_single.json
+!datasets/final_fillblank.json
+!datasets/final_conflict.json
 outputs/
 
 # other
