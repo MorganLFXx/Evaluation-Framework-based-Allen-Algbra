@@ -18,16 +18,13 @@ allenEnv/
 # dataset
 datas/
 old_datasets/
-datasets/**
-!datasets/.gitkeep
-!datasets/answers/.gitkeep
-!datasets/explain/.gitkeep
-!datasets/temp/.gitkeep
-!datasets/
-!outputs/.gitkeep
+# datasets/** # Cancel this comment after the initial clone
 !datasets/final_single.json
 !datasets/final_fillblank.json
 !datasets/final_conflict.json
+!datasets/final_single.jsonl
+!datasets/final_fillblank.jsonl
+!datasets/final_conflict.jsonl
 outputs/
 
 # other

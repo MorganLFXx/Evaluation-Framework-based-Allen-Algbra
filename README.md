@@ -1,10 +1,10 @@
-# allen-inference
-
-An experimental repository for data generation, model responses, verification, and analysis. It provides a unified entry point via `main.py` to run the full workflow quickly.
+# Diagnosing Temporal Reasoning in LLMs via Allen Algebra-Based Evaluation Framework
 
 ## Structure
 
 - datasets/: datasets and answer files
+    - final_{task}.jsonl: A ready-to-use benchmark that does not depend on this repository
+    - final_{task}.json: Benchmark compatible with this code repository workflow
 - generate/: data generation and prompt construction
 - explain/: answer verification and error checking
 - probing/: probing training and inference
@@ -21,6 +21,8 @@ pip install -r requirements.txt
 
 3. Add a .env file next to this README and fill in required keys (e.g., model API keys).
 
+Optional:
+Remove the ignore setting for the dataset folder in gitignore
 ## main.py Basics
 
 Unified entry:
